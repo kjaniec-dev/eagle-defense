@@ -1,178 +1,216 @@
-# G1 — Core combat: implementation plan (PROPOSAL)
+# G1 — Core combat: implementation plan (PROPOSAL v2)
 
-Status: **awaiting owner approval.** Planning only. No G1 code exists until the owner approves.
-Base: G0 (`g0/foundation`). Branch: `g1/combat`, one Draft PR.
+Status: **independent technical review PASS; awaiting owner approval.** Planning only.
+
+Preconditions for starting implementation:
+1. G0 is natively accepted and merged into `main`, with explicit owner authorization.
+2. The owner approves this plan, including decisions §11.
+
+Branch: `g1/combat` from the merged `main`, delivered as one Draft PR. Model: Opus. No CI, no BMAD.
+
+v2 incorporates the G1 plan review clarifications: integer units and rounding, snap safety and tie-breaks, contract reconciliation, the respawn rule, tuning identity in replays, and a high-priority polished visual spike.
 
 ## 1. Scope
 
 **In scope:**
 - 4-way player tank movement with half-tile turn snapping
-- shooting, projectile limits and the collision resolution order
+- shooting, projectile limits and collision order
 - tank and projectile collisions
 - an original test arena with target dummies
 - deterministic golden replays
-- a calibration pass
-- static 24 px vs 32 px art mockups
+- calibration and feel tuning
+- **two polished static gameplay concepts (24 px vs 32 px tiles)**
 
-**Out of scope (later milestones):**
-- G2: brick, steel, water, forest, ice and destruction
-- G4: enemy AI, spawning, HQ
+**Out of scope:**
+- G2: terrain types and destruction
+- G3: final assets, animation and shaders
+- G4: enemy AI, spawning, HQ logic
 - G5: lives, score, power-ups
-- audio and final art
+- audio
 
-## 2. Contract change: simulation units independent of art resolution
+## 2. Simulation units, conversion and rounding (contract amendment, decision G1-D1)
 
-This change needs owner approval, because it amends TECHNICAL_DESIGN §2.
-
-Today the simulation units are art pixels × 16, which couples the gameplay goldens to the 24 px tile decision. G1 switches to abstract units:
-
-| Quantity | Simulation units (u) |
+| Quantity | Units (u), all integers |
 |---|---|
-| tile | **256 u** (= 16 classic px × 16 sub-units) |
+| tile | **256 u** |
 | destruction cell (¼ tile) | 64 u |
 | turn-snap grid (½ tile) | 128 u |
 | playfield (13 tiles) | 3328 u |
+| tank / bullet box | 256 × 256 u / 32 × 32 u (bullet size is UNV, tunable) |
 
-- Positions, speeds (u/tick), timers (ticks) and the state hash are integers in **u only**.
-- Rendering maps `px = floor(u × TILE_PX / 256)`: at 24 px that is ×3/32, at 32 px it is ÷8. That mapping lives only in `src/render` and `config/presentation.lua`.
-- **Changing the art resolution never changes a golden.** A test proves it by running the same replay with presentation set to 24 px and to 32 px and requiring identical sim hashes.
+**Speeds:**
+- Speeds are stored as **integer u per tick** in `config/tuning.lua`. That integer is authoritative; the simulation never uses floats.
+- Human-readable tiles/s is derived for docs only: `tiles_s = u_per_tick × 60 / 256`. The resolution is 1 u/tick ≈ 0.234 tiles/s.
+- Converting a design value happens once, offline: `u_per_tick = floor(tiles_s × 256 / 60 + 0.5)`, i.e. round half up. The resulting integer is committed. Runtime code never converts.
 
-## 3. Reference calibration
+**Rendering:**
+- `px = floor(u × TILE_PX / 256)`, applied to the entity's top-left in `src/render` only. `TILE_PX` lives in `config/presentation.lua`, which `src/sim` cannot require (enforced by the boundary checker).
+- One sim tick is one 1/60 s step, as defined in G0.
 
-- All G1 constants move to `config/tuning.lua`. Each is tagged `UNV` (placeholder), `MEASURED` (with method) or `TUNED` (owner feel sign-off):
-  - player speed
-  - normal and fast bullet speed
-  - bullet limit per upgrade level
-  - snap grid
-  - initial values: the placeholders from GAME_DESIGN §4, converted to u/tick
-- **Measurement method**, by observation only and never from ROM data or disassembly:
-  - Frame-step gameplay footage and count the frames a tank or bullet needs to cross N tiles.
-  - Record each measurement in `docs/calibration/G1.md`: source description, frames, tiles and result.
-  - The owner supplies the footage or measurements. I cannot watch video.
-- **Feel tuning:** a debug overlay (F5) adjusts tuning values live and prints them. The owner plays and signs off. Final values are committed with the tag `TUNED (owner, date)`.
-- GAME_DESIGN §4 is updated wherever a value moves from UNV.
+**Golden independence:** a test runs the same replay with presentation set to 24 px and to 32 px and requires identical sim hashes at every checkpoint.
 
-## 4. Simulation (pure Lua, `src/sim/`)
+## 3. Contract reconciliation with TECHNICAL_DESIGN (part of G1-D1)
 
-**`world`:**
-- arena solids at cell resolution (a generic indestructible block in G1)
-- field bounds
-- tanks: player P1, plus a P2 slot used only by tests
-- target dummies
-- bullets
-- RNG
-- events
-- tick counter
+The G1 PR amends TECHNICAL_DESIGN §5–§6 before any code:
 
-**Movement:**
-- Instant start and stop (decision Q3).
-- One axis per tick.
-- Perpendicular turn: snap the other axis to the nearest 128 u, then move. If the snapped position is blocked, the tank turns in place and does not move.
-- Reversing never snaps.
-- Movement is clamped to contact with solids, bounds and other tanks. Tanks never overlap.
+| Topic | Current text | Amended contract |
+|---|---|---|
+| Tick order (§5) | input → AI → tank movement → bullet movement and collisions → bullet vs bullet → … | input → AI (none in G1) → tank movement → bullet spawn → **bullet phase** → removals → respawns → events. The **bullet phase** runs sub-steps of ≤ 64 u. Each sub-step does: (a) all bullets advance; (b) bullet vs bullet; (c) bullet vs tank; (d) bullet vs solid/bounds. Bullet-vs-bullet moves *into* the per-sub-step loop instead of being a separate later pass. |
+| Blocked movement (§6) | "A blocked move is rejected per axis" | A move is **clamped to contact**: the largest displacement ≤ speed that causes no overlap with solids, bounds or tanks, computed in integer u. A full rejection would leave visible gaps at walls, because speeds are not divisors of the tile. |
+| Ties (§6) | resolved by entity order | Unchanged: P1, P2, dummies in creation order, bullets in spawn order. |
 
-**Shooting:**
-- On `fire_pressed`, spawn a bullet at the muzzle (center of the front edge) if the tank's active bullets are below its limit: 1 at upgrade levels 0–1, 2 from level 2.
-- A bullet spawned inside a solid hits it immediately.
+## 4. Movement rules
 
-**Tick order** (documented as an invariant and tested):
-1. input → tank movement (entity order: P1, P2, dummies)
-2. spawn new bullets
-3. advance bullets in sub-steps of ≤ 64 u. Each sub-step resolves:
-   1. bullet vs bullet: opposing factions cancel, using swept overlap so head-on bullets cannot pass through each other; same-faction bullets pass through
-   2. bullet vs tank
-   3. bullet vs solid and bounds
-4. remove dead entities
-5. emit events (`shot`, `bullet_hit_solid`, `bullet_cancel`, `tank_hit`)
+- **Instant start and stop** (decision Q3). Movement is along one axis per tick. Direction comes from the InputFrame (last pressed wins, as in G0).
+- **Perpendicular turn:** the target is the nearest multiple of 128 u on the perpendicular axis.
+  - The snap distance is ≤ 64 u.
+  - **Tie-break** when the position is exactly between two grid lines (offset 64): snap toward the lower coordinate (up / left). This is a deterministic assumption, tagged UNV.
+  - The **snap is a collision-checked move**. If the snapped box would overlap a solid, bound or tank, the tank does *not* snap and does *not* move this tick, but its facing changes. Snapping therefore never moves a tank through or into geometry.
+  - Then the forward move is clamped to contact.
+- **Reversing** never snaps.
+- **Invariant:** after every tick, no tank overlaps a solid, a bound or another tank. A per-tick debug assertion checks it in tests and replays.
 
-Ties are broken by entity order.
+## 5. Shooting and bullets
 
-**In the G1 arena only:** a hit dummy is destroyed. A hit player respawns at its spawn point. Lives come in G5.
+- `fire_pressed` spawns a bullet if the tank's active bullets are below the limit: 1 at upgrade levels 0–1, 2 at level 2+. Holding fire does not repeat (decision Q4).
+- **Spawn position:** centered on the tank's front edge, so the muzzle is the bullet's rear edge.
+- **Muzzle obstruction:** if the spawn box overlaps a solid or bound, the bullet hits it on spawn (`bullet_hit_solid`, no travel). If it overlaps an opposing bullet, they cancel. If it overlaps another tank, it hits that tank.
+- **Sub-steps:** the whole world uses one sub-step count per tick, `n = ceil(max active bullet speed / 64)`. Each bullet splits its own speed into n integer parts, giving the remainder to the first sub-steps. A bullet therefore never moves more than 64 u per sub-step, and all bullets are checked against each other at the same sub-step boundaries.
+- **Bullet vs bullet:** opposing factions cancel. Detection uses the swept AABB of each bullet over the sub-step, so head-on bullets at any speed and phase cannot tunnel. Same-faction bullets pass through each other.
+- **Simultaneous hits:**
+  - If a bullet would hit a bullet and a tank in the same sub-step, the bullet-vs-bullet check runs first.
+  - If two bullets hit the same tank in one sub-step, both are consumed and the tank is hit once.
+- **Events:** `shot`, `bullet_hit_solid`, `bullet_cancel`, `tank_hit`, `tank_respawn`, `respawn_blocked`.
 
-## 5. Test arena (original)
+## 6. Arena, dummies and respawn (decision G1-D2)
 
-- A data file `config/arenas/g1_arena.lua` holds a 13×13 original layout of indestructible blocks with corridors, a 1-tile lane, intersections and open space.
-- Target dummies: 2 static dummies, and 1 turret that fires on a fixed tick schedule along a lane, to exercise bullet cancellation.
-- It is drawn with flat-color shapes marked PLACEHOLDER.
-- The app state `arena` is reached from boot. `--arena` and `--smoke` run it headless.
+- `config/arenas/g1_arena.lua` holds an original 13×13 layout of indestructible blocks: corridors, a 1-tile lane, intersections and an open area. It is validated at load.
+- Dummies: 2 static targets, and 1 turret that fires on a fixed tick schedule down a lane. No AI.
+- **Arena-only respawn:** a hit player is removed and respawns at its spawn point on the next tick.
+  - If the spawn box is **occupied** by any tank, the respawn is deferred tick by tick, emitting `respawn_blocked` once, until the box is free. A respawn never creates an overlap.
+  - Bullets do not block a respawn. A bullet inside the spawn box on the respawn tick resolves normally in that tick's bullet phase.
+  - Lives arrive in G5; this rule is arena-only.
 
-## 6. Tests (they must prove the combat works)
+## 7. Tuning, calibration and replay identity (decision G1-D3)
 
-**Scenario tests** drive `sim.step` with InputFrames and assert observable outcomes:
-- exact positions after N ticks
-- reaching and stopping at walls and other tanks
-- turn snapping at an intersection, and entering the 1-tile lane
-- blocked snap
+- `config/tuning.lua` holds every G1 constant with a provenance tag:
+  - `UNV`: a placeholder assumption
+  - `TUNED (owner, date)`: subjective feel sign-off
+  - `MEASURED (method, source, date)`: an observed reference value
+- **Subjective tuning is never labelled MEASURED.** Measurement comes from frame-stepping gameplay footage only, never from ROM data. It is optional in G1.
+- **Tuning identity:** `tuning_id` = the hash of the canonical serialization of the tuning table (G0 serializer).
+  - Every replay records the `tuning_id` and `tuning_version` it was recorded with.
+  - The replay runner **refuses** to evaluate a replay whose `tuning_id` differs from the active tuning. It reports the mismatch instead of silently producing different results.
+- **Live debug tuning (F5 overlay):**
+  - It edits an in-memory copy only. It never writes `config/tuning.lua` or any fixture.
+  - While active, the HUD shows `TUNING MODIFIED`, and recordings are tagged `debug_tuned = true`.
+  - `tools/update_goldens.lua` refuses to accept debug-tuned replays.
+  - Signed-off values are copied into `config/tuning.lua` by a normal commit. Goldens are then regenerated explicitly and called out in the PR.
+
+## 8. Tests (they must prove combat works)
+
+**Scenario tests** drive `sim.step` with InputFrames and assert positions, events and invariants:
+- movement and stop-at-contact for walls, bounds and tanks
+- turn snap at an intersection, entering the 1-tile lane, the snap tie-break, and a blocked snap (turn without moving)
+- snapping never passing through geometry
 - reversing
-- last-pressed direction through a full turn sequence
-- one press fires one bullet; holding fire does nothing more (decision Q4)
-- bullet limits per level
-- muzzle spawn inside a wall
+- last-pressed through a full turn sequence
+- single shot per press, and the bullet limits per level
+- **muzzle obstruction** by a wall, a bound, an opposing bullet and an adjacent tank
 - bullet vs wall, bounds and dummy
-- head-on cancellation at every relative phase, so nothing tunnels
+- **high-speed head-on cancellation** across every relative phase offset (0–63 u) and speed pair, so nothing tunnels
 - same-faction pass-through
-- collision ordering when a bullet would hit a bullet and a tank in the same sub-step
+- **simultaneous collisions**: bullet + bullet + tank in one sub-step, two bullets on one tank
+- **occupied respawn**: deferred until free, never overlapping
+- the no-overlap invariant asserted every tick in every scenario
 
 **Golden replays:**
-- Format: `tests/fixtures/replays/*.lua` in the serialize format, holding seed, arena, run-length-encoded InputFrames and `checkpoints = { [tick] = hash }`.
-- 3–4 replays: a movement tour, a shooting gallery, a cancellation duel, a stress run.
-- Goldens are regenerated only with `tools/update_goldens.lua`, and the PR must call it out.
-- Determinism is checked across 2 independent LuaJIT processes and across the 24 px / 32 px presentation settings (§2).
+- Fixtures in `tests/fixtures/replays/*.lua` hold seed, arena, `tuning_id`, run-length-encoded InputFrames and checkpoint hashes.
+- Four replays: a movement tour, a shooting gallery, a cancellation duel and a stress run.
+- They are regenerated only by `tools/update_goldens.lua`, and each regeneration is called out in the PR.
 
-**Purity and smoke:**
-- The boundary checker now covers real `src/sim` code.
-- Smoke runs the arena with scripted input, asserting the sim hash plus the existing pixel-perfect check.
+**Determinism:** checked across 2 LuaJIT processes, and identical for 24 px and 32 px presentation.
 
-## 7. Static art mockups: 24 px vs 32 px tiles
+**Smoke:** runs the arena headless with scripted input, asserting the sim hash plus the G0 pixel-perfect check.
 
-- One static scene, rendered twice:
-  - classic environment with brick, steel, water, forest and ice
-  - an original HQ emblem
-  - P1 and P2
-  - 3 enemy silhouettes
-  - 2 bullets
-  - one explosion frame
-- Built with Pipeline A (ART_DIRECTION §7): palette-indexed source sprites in the repo, `tools/build_sprites.lua` → PNG, composed by LÖVE in a `--mockup` mode.
-- Output at 1× and 3× into `docs/art/mockups/`. These are **concept art, not shipped**, and their provenance is recorded.
-- This is an art spike only. It does not change gameplay, and the result does not affect goldens (§2).
+## 9. Visual direction spike — HIGH PRIORITY (decision G1-D4, G1-D5)
 
-## 8. Owner acceptance criteria
+**Goal:** two genuinely polished static gameplay concepts, so the owner can pick the art direction. They must not look like placeholders.
 
-**Game feel** (native, on the owner's Mac, keyboard and pad):
-1. Start and stop feel instant, with no perceived input lag.
-2. Turning into a 1-tile lane at an intersection works on the first try, with no fighting the snap.
-3. Movement and bullet speeds feel "classic". The owner signs off the tuned values.
+**Same original battlefield composition in both**, including:
+- detailed top-down tanks (silhouette, armor plating, tracks)
+- the original gold P1 and teal P2 tanks
+- 3 distinct enemy designs
+- an original eagle HQ
+- detailed brick and steel
+- water, forest and ice
+- one readable projectile with a trail
+- one explosion with restrained debris
+- restrained shadows and lighting
+- a representative HUD (side panels)
+
+| Concept | Tile | Internal canvas | At 1920×1080 |
+|---|---|---|---|
+| A | 24 px | 640×360 | 3× integer, exact fill |
+| B | 32 px | 768×432 | 2× integer = 1536×864 with letterbox, **or** 2.5× "fit" (sharp-bilinear) |
+
+**Deliverables** go in `docs/art/mockups/`, which is concept art, never shipped, with provenance recorded:
+- `A-native.png` (640×360) and `B-native.png` (768×432)
+- `A-1920x1080.png` (3×), `B-1920x1080-integer.png` (2× letterboxed) and `B-1920x1080-fit.png` (2.5×)
+- `compare-1920x1080.png`: the same region (P1 tank, a brick and steel corner, the HQ) from A and B side by side **at the same physical size on screen**, showing the real detail gain against the scaling trade-off. The 2560×1440 case is also noted: A at 4×, B at 3×.
+- a short write-up of the trade-offs and a recommendation
+
+**Pipeline options** (decision G1-D5):
+- **A. Hand-authored pixel art in the repo (default).**
+  - Palette-indexed sprite sources (`assets/src/*.lua`) are rendered by `tools/build_sprites.lua`, with helpers for outlines, shading ramps, mirrored halves and 4-direction rotation.
+  - The final composition is rendered by LÖVE in a `--mockup` mode.
+  - No new dependencies. This is the crispest result, and its provenance is fully text-reviewable.
+- **B. Blender-assisted tank bodies (proposed, not adopted).**
+  - Low-poly tank models are rendered orthographically top-down, quantized to the palette, then hand-cleaned as indexed sprites.
+  - Pros: consistent lighting and plating across rotations and track frames, and easier variants.
+  - Cons: pre-rendered "mush" without heavy cleanup, and an extra tool dependency for asset authoring. **Blender is never a runtime dependency.**
+  - It would be used through the Blender MCP only if the owner approves.
+- **Honest risk:** AI-authored pixel art may fall short of the premium bar. If it does, the comparison still decides the resolution, and ART_DIRECTION Pipeline B (commission a pixel artist for hero sprites) becomes the recommendation.
+
+**Bounded:** static frames only. No animation, no shaders and no final asset set; those are G3.
+
+## 10. Owner acceptance criteria
+
+**Feel** (native, on the owner's Mac, keyboard and pad):
+1. Start and stop feel instant, with no perceived lag.
+2. The 1-tile lane can be entered on the first try at an intersection.
+3. Movement and bullet speeds feel classic, and the owner signs off the tuned values.
 4. One press = one shot. The bullet limit is noticeable. Fast bullets are clearly faster.
-5. Bullet cancellation against the turret is visible and reliable.
-6. Motion is smooth at 60 Hz, with no hitching. 120 Hz ProMotion is acceptable.
+5. Cancellation against the turret is visible and reliable.
+6. Motion is smooth at 60 Hz, with no hitching. 120 Hz is acceptable.
 
-**Visual direction:**
+**Visual:**
 
-7. The owner picks 24 px or 32 px tiles from the mockups and records style feedback. On approval, ART_DIRECTION §3 is updated. A "revise" outcome is allowed.
+7. The owner picks A or B, or asks for a revision, viewing the PNGs on a real display. The decision and feedback are recorded in ART_DIRECTION §3.
 
 **Automated:**
 
-8. `make check` is green, with all of §6 passing. Final evidence comes from a clean HEAD.
+8. `make check` is green with all of §8. Final evidence is generated from a clean HEAD.
 
-## 9. Work order
+## 11. Owner decisions
 
-1. Units contract + `config/tuning.lua`
-2. Movement + tests
-3. Bullets and collision order + tests
-4. Arena + dummies
-5. Replays + goldens
-6. Placeholder render + arena state + smoke
-7. Tuning overlay + calibration doc
-8. Mockups
-9. Docs + evidence + Draft PR
-
-Models: Opus throughout. Shaders are not needed in G1, so Fable 5.2 is not used yet.
-
-## 10. Owner decisions needed
-
-| # | Decision | Proposal |
+| # | Decision | Reviewer recommendation |
 |---|---|---|
-| G1-D1 | Approve the simulation-units contract change (§2, tile = 256 u) | Approve |
-| G1-D2 | Arena-only rule: a hit player respawns instantly | Approve (lives come in G5) |
-| G1-D3 | Calibration source: will you provide frame-stepped measurements from footage, or feel tuning only? | Both if possible; feel tuning at minimum |
-| G1-D4 | Mockups stored as concept art under `docs/art/mockups/`, not shipped | Approve |
+| G1-D1 | Tile = 256 u, plus the §3 contract amendments (tick order, clamp-to-contact) | Approve |
+| G1-D2 | Arena-only instant respawn, deferred while the spawn is occupied | Approve |
+| G1-D3 | Calibration: owner feel tuning is sufficient; frame-stepped measurements are optional | Feel tuning is sufficient |
+| G1-D4 | Mockups under `docs/art/mockups/`, not shipped | Approve |
+| G1-D5 | Visual pipeline: A (hand-authored, default) or A plus a Blender-assisted tank experiment through the Blender MCP | A; Blender only if the owner wants the experiment |
+
+## 12. Work order
+
+1. TECHNICAL_DESIGN amendments
+2. Units and tuning
+3. Movement + tests
+4. Bullets + tests
+5. Arena, dummies and respawn
+6. Replays and goldens
+7. Placeholder render, arena state and smoke
+8. Tuning overlay
+9. **Visual spike** (it can start in parallel after step 1)
+10. Docs, evidence and Draft PR
