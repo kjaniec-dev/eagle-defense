@@ -14,7 +14,8 @@ end
 function M.draw(markers)
   local lg = love.graphics
   if not font then
-    font = lg.newFont(10, "mono")
+    -- Drawn into the internal canvas: rasterise at 1x, not at display DPI.
+    font = lg.newFont(10, "mono", 1)
     font:setFilter("nearest", "nearest")
   end
 

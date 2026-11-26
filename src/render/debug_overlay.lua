@@ -8,7 +8,8 @@ local font
 function M.draw(info)
   local lg = love.graphics
   if not font then
-    font = lg.newFont(14, "mono")
+    -- Screen-space overlay: native display DPI on purpose (crisp on HiDPI).
+    font = lg.newFont(14, "mono", lg.getDPIScale()) -- dpi: native (screen-space overlay)
   end
   local lines = {
     ("FPS %d   frame %.2f ms"):format(info.fps, info.frame_ms),

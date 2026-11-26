@@ -9,6 +9,7 @@ local screen_mod = require("src.render.screen")
 local overlay = require("src.render.debug_overlay")
 local args_mod = require("src.app.args")
 local upscale_check = require("src.app.upscale_check")
+local fit_check = require("src.app.fit_check")
 local bindings = require("config.bindings")
 
 local App = {}
@@ -30,6 +31,9 @@ function App.load(argv)
   App.mapper = mapper_mod.new(bindings)
   App.devices = devices_mod.new(bindings)
   App.screen = screen_mod.new()
+  if App.opts.scale_mode then
+    App.screen.mode = App.opts.scale_mode
+  end
   App.overlay_on = false
   App.last_frame = mapper_mod.empty_frame()
   App.stats = { sim_ms = 0, ticks_last = 0, frame_ms = 0 }
@@ -94,7 +98,8 @@ local function write_file(path, bytes)
 end
 
 local function smoke_report(window_image)
-  local canvas_image = App.screen.canvas:newImageData()
+  local screen = App.screen
+  local canvas_image = screen.canvas:newImageData()
   local png = canvas_image:encode("png"):getString()
   local out = App.opts.smoke_out
   local ok, err
@@ -109,70 +114,75 @@ local function smoke_report(window_image)
     App.exit_code = 1
     return
   end
-
-  -- Pixel-perfect check: the window backbuffer must be an exact integer
-  -- upscale of the canvas.
-  local vp = App.screen.vp
-  local ww, wh = window_image:getDimensions()
-  local res = upscale_check.verify(
-    function(x, y)
-      return canvas_image:getPixel(x, y)
-    end,
-    canvas_image:getWidth(),
-    canvas_image:getHeight(),
-    function(x, y)
-      return window_image:getPixel(x, y)
-    end,
-    ww,
-    wh,
-    vp
-  )
   if App.opts.smoke_window_out then
     write_file(App.opts.smoke_window_out, window_image:encode("png"):getString())
   end
 
   -- Logical (window points) vs physical (framebuffer pixels). On HiDPI
-  -- displays they differ by the DPI scale. Integer scaling is defined and
-  -- verified in physical pixels only.
+  -- displays they differ by the DPI scale. Scaling is defined and verified
+  -- in physical pixels only; the internal canvas must stay at the
+  -- configured resolution with 1 texel per internal pixel.
   local lw, lh = love.graphics.getDimensions()
   local pw, ph = love.graphics.getPixelDimensions()
   local dpi = love.graphics.getDPIScale()
-  local dims_ok = ww == pw and wh == ph
+  local ww, wh = window_image:getDimensions()
+  local cw, ch = canvas_image:getDimensions()
+  local setup = {
+    canvas_w = cw,
+    canvas_h = ch,
+    canvas_dpi = screen.canvas:getDPIScale(),
+    expected_w = screen.w,
+    expected_h = screen.h,
+    shot_w = ww,
+    shot_h = wh,
+    phys_w = pw,
+    phys_h = ph,
+    vp = screen.vp,
+  }
+  local function canvas_px(x, y)
+    return canvas_image:getPixel(x, y)
+  end
+  local function window_px(x, y)
+    return window_image:getPixel(x, y)
+  end
+
+  local problems, fields
+  if screen.mode == "integer" then
+    problems, fields = upscale_check.run(setup, canvas_px, window_px)
+  else
+    local pre_image = screen.prescaled:newImageData()
+    setup.pre_w, setup.pre_h = pre_image:getDimensions()
+    setup.pre_dpi = screen.prescaled:getDPIScale()
+    problems, fields = fit_check.run(setup, canvas_px, function(x, y)
+      return pre_image:getPixel(x, y)
+    end, window_px)
+  end
+
   local m = App.machine.current.markers or {}
   local function pos(i)
     return m[i] and ("%d,%d"):format(m[i].x, m[i].y) or "-"
   end
   local renderer = { love.graphics.getRendererInfo() }
-  local passed = dims_ok and res.mismatches == 0 and res.letterbox_bad == 0 and res.checked > 0
-  print(
-    (
-      "SMOKE %s ticks=%d state=%s p1=%s p2=%s logical=%dx%d physical=%dx%d dpi=%.2f "
-      .. "screenshot=%dx%d scale=%d offset=%d,%d pixels_checked=%d mismatches=%d "
-      .. "letterbox_bad=%d out=%s renderer=%s os=%s"
-    ):format(
+  local passed = #problems == 0
+  local parts = {
+    ("SMOKE %s ticks=%d state=%s p1=%s p2=%s"):format(
       passed and "OK" or "FAIL",
       App.loop.tick,
       App.machine.current_name,
       pos(1),
-      pos(2),
-      lw,
-      lh,
-      pw,
-      ph,
-      dpi,
-      ww,
-      wh,
-      vp.scale,
-      vp.x,
-      vp.y,
-      res.checked,
-      res.mismatches,
-      res.letterbox_bad,
-      out,
-      table.concat(renderer, " / "),
-      love.system.getOS()
-    )
-  )
+      pos(2)
+    ),
+    ("logical=%dx%d physical=%dx%d dpi=%.2f screenshot=%dx%d"):format(lw, lh, pw, ph, dpi, ww, wh),
+    ("mode=%s canvas=%dx%d canvas_dpi=%.2f"):format(screen.mode, cw, ch, setup.canvas_dpi),
+  }
+  for _, f in ipairs(fields) do
+    parts[#parts + 1] = f[1] .. "=" .. tostring(f[2])
+  end
+  parts[#parts + 1] = "problems=" .. (passed and "none" or table.concat(problems, ";"))
+  parts[#parts + 1] = "out=" .. out
+  parts[#parts + 1] = "renderer=" .. table.concat(renderer, " / ")
+  parts[#parts + 1] = "os=" .. love.system.getOS()
+  print(table.concat(parts, " "))
   App.exit_code = passed and 0 or 1
 end
 

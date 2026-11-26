@@ -23,7 +23,7 @@ export LUA_CPATH := $(ROCKS)/lib/lua/5.1/?.so;;
 
 LUA_SOURCES := main.lua conf.lua src config tests tools assets/manifest.lua
 
-.PHONY: help bootstrap toolchain require-toolchain fmt fmt-check lint test validate smoke love \
+.PHONY: help bootstrap toolchain require-toolchain fmt fmt-check lint test validate smoke hidpi-sim love \
 	love-dev run check evidence evidence-dev busted-version luacheck-version stylua-version clean
 
 help:
@@ -35,9 +35,10 @@ help:
 	@echo "test       busted unit/scenario tests (LuaJIT)"
 	@echo "validate   architecture boundaries + asset manifest"
 	@echo "smoke      headless LÖVE run (Xvfb) with PNG capture"
+	@echo "hidpi-sim  SIMULATED HiDPI regression harness (integer + fit, DPI 1/1.25/1.5/2)"
 	@echo "love       build dist/eagle-defense.love from the committed HEAD (+ .sha256, .commit)"
 	@echo "love-dev   build dist/eagle-defense.love from the working tree (marked -dirty)"
-	@echo "check      fmt-check lint test validate smoke"
+	@echo "check      fmt-check lint test validate smoke hidpi-sim"
 	@echo "evidence   FINAL review evidence package (requires a clean tree; fails closed)"
 	@echo "evidence-dev  development snapshot package (dirty tree allowed, marked DEV)"
 
@@ -78,9 +79,13 @@ test: require-toolchain
 validate:
 	$(LUAJIT) tools/check_boundaries.lua
 	$(LUAJIT) tools/check_assets.lua
+	$(LUAJIT) tools/check_dpi.lua
 
 smoke:
 	./tools/smoke.sh $(SMOKE_TICKS) $(BUILD)/smoke.png
+
+hidpi-sim:
+	./tools/hidpi_sim.sh $(BUILD)/hidpi-sim
 
 love:
 	./tools/build_love.sh --commit
@@ -91,7 +96,7 @@ love-dev:
 run:
 	$(LOVE) .
 
-check: fmt-check lint test validate smoke
+check: fmt-check lint test validate smoke hidpi-sim
 
 evidence:
 	./tools/evidence.sh

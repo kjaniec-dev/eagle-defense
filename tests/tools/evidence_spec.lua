@@ -93,6 +93,21 @@ describe("evidence rules (review P2-4)", function()
       assert.are.equal(2, #p)
     end)
 
+    it("requires the SIMULATED HiDPI harness step and its logs", function()
+      local has_step = false
+      for _, s in ipairs(evidence.STEPS) do
+        has_step = has_step or s == "hidpi-sim"
+      end
+      assert.is_true(has_step)
+      local files, texts = complete_package()
+      files["hidpi-sim/fit-dpi2.log"] = nil
+      assert.is_true(#evidence.package_problems(files, texts, SHA) >= 1)
+      files, texts = complete_package()
+      texts.smoke_logs["hidpi-sim/fit-dpi2.log"] =
+        "HIDPI_SIM SIMULATED\nSMOKE FAIL problems=prescale_dpi:2!=1\n"
+      assert.is_true(#evidence.package_problems(files, texts, SHA) >= 1)
+    end)
+
     it("rejects a package without smoke logs", function()
       local files, texts = complete_package()
       texts.smoke_logs = {}

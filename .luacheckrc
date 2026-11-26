@@ -13,3 +13,6 @@ files["tools/"] = { std = "luajit" }
 files["tests/"] = { std = "luajit+busted" }
 files["conf.lua"] = { globals = { "love" } }
 files["main.lua"] = { globals = { "love" } }
+-- HiDPI simulation entry point: a LÖVE game directory that wraps
+-- love.graphics constructors (tools/hidpi_sim.sh).
+files["tools/hidpi_sim/"] = { std = "luajit+love", globals = { "love" } }

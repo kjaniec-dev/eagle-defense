@@ -12,7 +12,10 @@ Screen.__index = Screen
 function M.new(w, h)
   local self = setmetatable({}, Screen)
   self.w, self.h = w or viewport.CANVAS_W, h or viewport.CANVAS_H
-  self.canvas = love.graphics.newCanvas(self.w, self.h)
+  -- Internal pixel-art resources use an explicit pixel density of 1 texel
+  -- per internal pixel. LÖVE 11 would otherwise default to the display DPI
+  -- (a 1280x720-texel canvas on Retina). See TECHNICAL_DESIGN §2.
+  self.canvas = love.graphics.newCanvas(self.w, self.h, { dpiscale = 1 })
   self.canvas:setFilter("nearest", "nearest")
   self.mode = "integer"
   self.prescaled = nil -- intermediate canvas for "fit" mode
@@ -38,7 +41,7 @@ local function ensure_prescaled(self, k)
   if c and c:getWidth() == self.w * k then
     return c
   end
-  c = love.graphics.newCanvas(self.w * k, self.h * k)
+  c = love.graphics.newCanvas(self.w * k, self.h * k, { dpiscale = 1 })
   c:setFilter("linear", "linear")
   self.prescaled = c
   return c
