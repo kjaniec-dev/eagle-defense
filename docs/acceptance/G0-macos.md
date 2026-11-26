@@ -55,4 +55,4 @@ Owner verdict (2026-11-26): **PASS for the manually verified functionality.**
 - [ ] Issues found
 - Not tested: #11 gamepad. Not run: optional automated native smoke.
 
-The owner reported a summary verdict, not per-item notes or environment details. Fields marked "not reported" were left blank on purpose rather than guessed. This is native macOS evidence from the owner and is kept separate from the sandbox evidence in `docs/evidence/SUMMARY.md`.
+The owner reported a summary verdict, not per-item notes or environment details. Fields marked "not reported" were left blank on purpose rather than guessed. This is native macOS evidence from the owner and is kept separate from the sandbox evidence in `docs/evidence/G0.md`.

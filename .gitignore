@@ -11,6 +11,9 @@
 /dist/
 *.love
 /evidence/
+# Preserved native artifacts (checksums recorded in docs/evidence/). Outside
+# Git and NOT removed by `make clean`; copied into evidence packages.
+/native-evidence/
 
 # Editor / agent tooling (machine-local)
 .serena/

@@ -8,7 +8,11 @@
 # Final mode refuses to produce a package unless:
 #   * the source tree is clean: no modified, staged or untracked files, and
 #     no ignored files inside source paths (tools/lib/evidence.lua)
-#   * every mandatory check passes (fmt-check, lint, test, validate, smoke, love)
+#   * every mandatory check passes (fmt-check, lint, test, validate, smoke,
+#     hidpi-sim, love)
+#   * every preserved native artifact set (native-evidence/<set>/, outside
+#     Git and `make clean`) verifies against its SHA256SUMS, and each of its
+#     hashes is recorded in a committed docs/evidence/ report
 #   * the .love is built from the exact commit (git archive) and its
 #     recorded commit matches
 #   * every mandatory file is present and non-empty, and every smoke log
@@ -16,8 +20,10 @@
 #   * internal checksums verify, both before and after archiving
 #   * HEAD and the tree are unchanged after the checks ran
 #
-# Everything in the package is AUTOMATED SANDBOX/CI EVIDENCE, not native
-# acceptance.
+# Everything the package produces is AUTOMATED SANDBOX/CI EVIDENCE, not native
+# acceptance. hidpi-sim/ is SIMULATED HiDPI evidence. native/ holds artifacts
+# preserved from earlier native runs, as recorded; this package did not
+# produce them.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -77,11 +83,30 @@ step lint make --no-print-directory lint
 step test make --no-print-directory test
 step validate make --no-print-directory validate
 step smoke ./tools/smoke.sh 120 "$DIR/screenshots/smoke.png"
+step hidpi-sim ./tools/hidpi_sim.sh "$DIR/hidpi-sim"
 step love ./tools/build_love.sh "$LOVE_MODE"
 [[ $failed -eq 0 ]] || die "mandatory check(s) failed; no package produced"
 
 cp dist/eagle-defense.love dist/eagle-defense.love.sha256 dist/eagle-defense.love.commit "$DIR/build/"
 (cd "$DIR/build" && sha256_check eagle-defense.love.sha256) || die ".love checksum mismatch after copy"
+
+# --- preserved native artifacts (outside Git and `make clean`) ---------------
+native_sets=()
+if [[ -d "$ROOT/native-evidence" ]]; then
+  for set in "$ROOT"/native-evidence/*/; do
+    set="${set%/}"
+    [[ -d "$set" ]] || continue
+    name="$(basename "$set")"
+    [[ -s "$set/SHA256SUMS" ]] || die "native evidence '$name' has no SHA256SUMS"
+    (cd "$set" && sha256_check SHA256SUMS) || die "native evidence '$name': checksum mismatch"
+    while read -r hash _; do
+      grep -rqF "$hash" docs/evidence/ || die "native evidence '$name': $hash is not recorded in docs/evidence/"
+    done <"$set/SHA256SUMS"
+    mkdir -p "$DIR/native"
+    cp -R "$set" "$DIR/native/"
+    native_sets+=("$name")
+  done
+fi
 
 # --- metadata ----------------------------------------------------------------
 version_of() { "$@" 2>&1 | head -1 || echo "n/a"; }
@@ -98,15 +123,19 @@ version_of() { "$@" 2>&1 | head -1 || echo "n/a"; }
   fi
   echo "created:    $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "host:       $(uname -srm)"
+  echo "platform:   $(make --no-print-directory -s toolchain | sed -n 's/^platform=//p') (toolchain in .rocks/<platform>/, .tools/<platform>/)"
   echo "love:       $(version_of love --version)"
   echo "luajit:     $(version_of luajit -v)"
   echo "busted:     $(version_of make --no-print-directory -s busted-version)"
   echo "zip:        $(zip -v 2>/dev/null | sed -n 2p | sed 's/^ *//' || echo n/a)"
-  echo "luacheck:   $(version_of .rocks/bin/luacheck --version)"
-  echo "stylua:     $(version_of .tools/stylua --version)"
+  echo "luacheck:   $(version_of make --no-print-directory -s luacheck-version)"
+  echo "stylua:     $(version_of make --no-print-directory -s stylua-version)"
   echo "shellcheck: $(shellcheck --version 2>/dev/null | sed -n 2p || echo n/a)"
   echo
+  echo "native:     ${native_sets[*]:-none} (native/: preserved native artifacts, not produced by this run)"
+  echo
   echo "EVIDENCE CLASS: automated sandbox/CI evidence (Linux, Xvfb, software GL)."
+  echo "hidpi-sim/ is SIMULATED HiDPI evidence (implicit resource DPI forced to 1/1.25/1.5/2)."
   echo "This is NOT native macOS/Windows acceptance evidence."
 } >"$DIR/MANIFEST.txt"
 

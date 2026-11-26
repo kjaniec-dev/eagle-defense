@@ -23,7 +23,7 @@ M.SOURCE_PATHS = {
   "stylua.toml",
 }
 
-M.STEPS = { "fmt-check", "lint", "test", "validate", "smoke", "love" }
+M.STEPS = { "fmt-check", "lint", "test", "validate", "smoke", "hidpi-sim", "love" }
 
 M.REQUIRED_FILES = {
   "MANIFEST.txt",
@@ -37,6 +37,9 @@ M.REQUIRED_FILES = {
   "screenshots/smoke.png",
   "screenshots/smoke-window.png",
   "screenshots/smoke.log",
+  -- SIMULATED HiDPI harness (tools/hidpi_sim.sh): both modes at DPI 2.
+  "hidpi-sim/integer-dpi2.log",
+  "hidpi-sim/fit-dpi2.log",
 }
 
 local function in_source(path)

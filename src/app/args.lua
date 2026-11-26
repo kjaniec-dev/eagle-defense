@@ -3,6 +3,9 @@
 --   --smoke-out=PATH   where to write the canvas PNG (default: save dir smoke.png)
 --   --smoke-window-out=PATH  also write the full window (upscaled) PNG
 --   --window=WxH       initial window size in pixels
+--   --scale-mode=MODE  initial presentation mode: integer (default) or fit
+
+local viewport = require("src.render.viewport")
 
 local M = {}
 
@@ -26,6 +29,18 @@ function M.parse(argv)
         error("--window expects WxH, got " .. tostring(value), 0)
       end
       opts.window_w, opts.window_h = tonumber(w), tonumber(h)
+    elseif key == "scale-mode" then
+      local known = false
+      for _, m in ipairs(viewport.MODES) do
+        known = known or m == value
+      end
+      if not known then
+        error(
+          "--scale-mode expects one of " .. table.concat(viewport.MODES, ", ") .. ", got " .. value,
+          0
+        )
+      end
+      opts.scale_mode = value
     end
   end
   return opts

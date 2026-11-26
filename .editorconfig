@@ -13,3 +13,8 @@ indent_style = tab
 
 [*.md]
 trim_trailing_whitespace = false
+
+# Byte-exact od(1) output captures; the trailing spaces are part of the data.
+[tests/fixtures/od/*]
+trim_trailing_whitespace = false
+insert_final_newline = false

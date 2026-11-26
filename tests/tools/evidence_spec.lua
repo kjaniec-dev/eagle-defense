@@ -27,6 +27,15 @@ describe("evidence rules (review P2-4)", function()
       assert.are.same({}, evidence.tree_problems(porcelain))
     end)
 
+    it(
+      "accepts per-platform toolchain directories (.rocks/<platform>/, .tools/<platform>/)",
+      function()
+        local porcelain =
+          "!! .rocks/darwin-arm64/\n!! .rocks/linux-arm64/\n!! .tools/darwin-arm64/stylua\n"
+        assert.are.same({}, evidence.tree_problems(porcelain))
+      end
+    )
+
     it("rejects untracked files", function()
       local p = evidence.tree_problems("?? src/new_module.lua\n")
       assert.are.equal(1, #p)
@@ -82,6 +91,21 @@ describe("evidence rules (review P2-4)", function()
       texts.smoke_logs["screenshots/smoke-800x600.log"] = "SMOKE FAIL mismatches=3\n"
       local p = evidence.package_problems(files, texts, SHA)
       assert.are.equal(2, #p)
+    end)
+
+    it("requires the SIMULATED HiDPI harness step and its logs", function()
+      local has_step = false
+      for _, s in ipairs(evidence.STEPS) do
+        has_step = has_step or s == "hidpi-sim"
+      end
+      assert.is_true(has_step)
+      local files, texts = complete_package()
+      files["hidpi-sim/fit-dpi2.log"] = nil
+      assert.is_true(#evidence.package_problems(files, texts, SHA) >= 1)
+      files, texts = complete_package()
+      texts.smoke_logs["hidpi-sim/fit-dpi2.log"] =
+        "HIDPI_SIM SIMULATED\nSMOKE FAIL problems=prescale_dpi:2!=1\n"
+      assert.is_true(#evidence.package_problems(files, texts, SHA) >= 1)
     end)
 
     it("rejects a package without smoke logs", function()

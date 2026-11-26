@@ -39,7 +39,7 @@ elseif cmd == "post" then
   end
   local logs = {}
   for rel in pairs(files) do
-    if rel:match("^screenshots/.*%.log$") then
+    if rel:match("^screenshots/.*%.log$") or rel:match("^hidpi%-sim/.*%.log$") then
       logs[rel] = fs.read(dir .. "/" .. rel)
     end
   end

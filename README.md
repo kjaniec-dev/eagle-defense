@@ -33,12 +33,14 @@ Controls in the G0 sandbox:
 ## Develop
 
 ```sh
-make bootstrap   # pinned local toolchain → .rocks/, .tools/
+make bootstrap   # pinned local toolchain → .rocks/<platform>/, .tools/<platform>/
 make check       # fmt-check + lint + test + validate + smoke (required before every PR)
 make test        # unit tests only
 make love        # dist/eagle-defense.love (+ .sha256)
 make evidence    # review evidence package → evidence/
 ```
+
+Native tools are installed per platform (`make toolchain` shows the resolved key, e.g. `darwin-arm64` or `linux-arm64`). A macOS host and a Linux container can share one checkout: run `make bootstrap` once in each, and neither overwrites the other's binaries. See [docs/CI.md](docs/CI.md#toolchain-layout).
 
 ## Documentation
 
