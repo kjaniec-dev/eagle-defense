@@ -27,6 +27,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=tools/lib/portable.sh
 . "$ROOT/tools/lib/portable.sh"
+# shellcheck source=tools/lib/hidpi_labels.sh
+. "$ROOT/tools/lib/hidpi_labels.sh"
 OS="$(uname -s)"
 MUTATIONS=0
 if [[ "${1:-}" == "--mutations" ]]; then
@@ -61,18 +63,6 @@ run_with_timeout() {
   else
     perl -e 'alarm shift @ARGV; exec @ARGV or die "exec failed: $!"' "$secs" "$@"
   fi
-}
-
-# Maps in-app problem codes to the regression they reveal.
-labels_for_problems() {
-  local problems="$1"
-  [[ "$problems" == *canvas_pixels* || "$problems" == *canvas_dpi* ]] && echo "game-canvas-dpi"
-  [[ "$problems" == *prescale_pixels* || "$problems" == *prescale_dpi* ]] && echo "prescale-canvas-dpi"
-  [[ "$problems" == *blended:0* ]] && echo "fit-filtering"
-  local rest
-  rest="$(tr ';' '\n' <<<"$problems" | grep -v -E '^(none|.*canvas_pixels.*|canvas_dpi.*|prescale_pixels.*|prescale_dpi.*|blended:0.*|)$' || true)"
-  [[ -n "$rest" ]] && echo "other-check"
-  return 0
 }
 
 # run_case APP_ROOT MODE SIZE SCALE DIR -> prints "CASE ... PASS|FAIL [labels]"
