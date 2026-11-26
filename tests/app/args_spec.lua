@@ -1,0 +1,36 @@
+local args = require("src.app.args")
+
+describe("app.args", function()
+  it("parses smoke options", function()
+    local o = args.parse({ "--smoke=120", "--smoke-out=/tmp/x.png" })
+    assert.are.equal(120, o.smoke)
+    assert.are.equal("/tmp/x.png", o.smoke_out)
+  end)
+
+  it("parses the window size", function()
+    local o = args.parse({ "--window=1366x768" })
+    assert.are.equal(1366, o.window_w)
+    assert.are.equal(768, o.window_h)
+    assert.has_error(function()
+      args.parse({ "--window=big" })
+    end)
+  end)
+
+  it("defaults to interactive mode", function()
+    assert.is_nil(args.parse({}).smoke)
+  end)
+
+  it("rejects invalid tick counts", function()
+    for _, bad in ipairs({ "--smoke=0", "--smoke=abc", "--smoke=1.5" }) do
+      assert.has_error(function()
+        args.parse({ bad })
+      end)
+    end
+  end)
+
+  it("produces deterministic scripted smoke input", function()
+    assert.are.same(args.smoke_frame(10), args.smoke_frame(10))
+    assert.are.equal("right", args.smoke_frame(1)[1].dir)
+    assert.are.equal("down", args.smoke_frame(61)[1].dir)
+  end)
+end)
