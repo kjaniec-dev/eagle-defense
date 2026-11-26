@@ -38,12 +38,12 @@ Units: **tiles** = playfield tiles (the playfield is 13×13 tiles). **cells** = 
 | Playfield | 13×13 tiles; tanks are 1×1 tile | CC | Same: 13×13 tiles, 24 px art per tile (see TECHNICAL_DESIGN) |
 | Movement | 4 directions, continuous, no turret | DOC | Same |
 | Acceleration | Classic tanks start and stop instantly. Ice is the exception. | CC | **Instant start/stop.** The master prompt says "classic acceleration". We read that as "none". Question Q3. |
-| Turning | On a perpendicular turn, the tank snaps to the nearest half-tile | CC | Snap to the half-tile grid. The snap distance is ≤ ¼ tile, so it is unnoticeable. |
+| Turning | On a perpendicular turn, the tank snaps to the nearest half-tile | CC | Snap to the half-tile grid. The snap distance is ≤ ¼ tile, so it is unnoticeable. An exact tie snaps up/left (**UNV**). A snap that would collide is not performed: the tank turns in place and retries the snap on later ticks (G1, TECHNICAL_DESIGN §6). |
 | Reversing | Reversing is instant, with no snap | CC | Same |
 | Simultaneous directions | Unknown | UNV | **Last-pressed direction wins**, so a released key restores the remaining held key. This is deterministic and testable. |
-| Speeds | Player ≈ basic enemy; fast enemy ≈ 2× basic | UNV | Data-driven `tiles/s` values. Placeholders: player 1.40, basic 0.70, fast 1.40, power 1.05, armor 0.70. These are calibrated in G1/G4. |
+| Speeds | Player ≈ basic enemy; fast enemy ≈ 2× basic | UNV | Data-driven values, stored as integer u/tick in `config/tuning.lua` (1 tile = 256 u). Placeholders: player 1.40 tiles/s (6 u/tick = 1.41 tiles/s), basic 0.70, fast 1.40, power 1.05, armor 0.70. Player speed is tuned by the owner in G1; enemy speeds in G4. |
 | Ice | The tank slides a short distance after input stops or turns | CC (duration UNV) | Slide of ≈ ½–1 tile, calibrated in G2 |
-| Tank vs tank | Tanks block each other. Overlap is resolved by refusing the move. | CC | Same. Tanks spawning inside other tanks may move out (§4.5). |
+| Tank vs tank | Tanks block each other. Overlap is resolved by refusing the move. | CC | Same, as clamp-to-contact: a move stops exactly at the blocking tank, wall or bound (G1-D1). Tanks spawning inside other tanks may move out (§4.5). |
 
 ### 4.2 Shooting
 
@@ -51,8 +51,10 @@ Units: **tiles** = playfield tiles (the playfield is 13×13 tiles). **cells** = 
 |---|---|---|---|
 | Shot limit | 1 active player bullet at star 0–1, and 2 at star 2+ | DOC (star 2) | Same |
 | Firing | Fires as soon as a slot is free; there is no cooldown beyond that | CC | Same. A held fire button does **not** auto-repeat; this is an assumption, see Q4. |
-| Bullet speed | Normal and fast (star 1+ and the Power enemy) | DOC (qualitative) | Placeholders: normal 4 tiles/s, fast 8 tiles/s, calibrated in G1 |
+| Bullet speed | Normal and fast (star 1+ and the Power enemy) | DOC (qualitative) | Placeholders: normal 4 tiles/s (17 u/tick = 3.98 tiles/s), fast 8 tiles/s (34 u/tick = 7.97 tiles/s), tuned by the owner in G1. Bullet size 32 × 32 u (⅛ tile) is **UNV**. |
 | Bullet vs bullet | Opposing bullets cancel each other | CC | Player and enemy bullets cancel. Bullets from the same faction pass through each other (UNV). |
+| Point-blank shot | Unknown | UNV | A bullet whose spawn box (on the tank's front edge) already overlaps something resolves at once: opposing bullet → cancel, tank → hit, wall or bound → `bullet_hit_solid` without travel (G1). |
+| Friendly bullet (G1) | A hit stuns the partner (see §4.6) | CC | Until the stun arrives in G6, a player bullet that reaches the other player is consumed and reported as a friendly `tank_hit` with no other effect. |
 | Bullet vs water and forest | Passes over them | CC | Same |
 | Bullet vs edge of the field | Bullet is destroyed | CC | Same, with a "spark" event |
 
@@ -168,3 +170,11 @@ On 2026-11-26 the owner accepted the defaults below. Each one can be reopened by
 6. There are exactly 20 enemies per stage (from the level roster). Each is spawned once and removed once.
 7. HQ destruction ends the stage as a loss within the same tick.
 8. Destruction state is stored at cell resolution only. There is no floating-point geometry.
+
+## 11. G1 test arena (not a campaign level)
+
+The G1 arena (`config/arenas/g1_arena.lua`) exists only to tune and verify combat feel. It is original, uses indestructible blocks only (terrain types arrive in G2), and has no HQ, enemies, lives or score.
+- **Target dummies** are static tank-sized targets in the enemy faction. A hit consumes the bullet and is counted; dummies are never destroyed.
+- **Turret dummy:** a static enemy-faction target that fires one bullet (limit 1) on a fixed tick schedule down a lane, so cancellation can be practised. No AI.
+- **Arena respawn** (G1-D2): a hit player respawns at its spawn point on the next tick; it is deferred while any tank occupies the spawn box. Lives arrive in G5.
+- Player upgrade level for testing bullet limits and speeds is an arena tuning value (`arena.player_level`), changed through the F5 debug tuning overlay.
