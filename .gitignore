@@ -1,0 +1,19 @@
+# Worktrees
+.worktrees/
+
+# Local toolchain
+.rocks/
+.tools/
+
+# Build outputs
+build/
+dist/
+*.love
+evidence/
+
+# Editor / agent tooling (machine-local)
+.serena/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
