@@ -46,8 +46,7 @@ case "$os-$arch" in
   *) die "unsupported platform for StyLua: $os-$arch" ;;
 esac
 
-if [[ -x "$TOOLS/stylua" ]] && "$TOOLS/stylua" --version
-"$TOOLS/actionlint" -version | head -1 | grep -q "$STYLUA_VERSION"; then
+if [[ -x "$TOOLS/stylua" ]] && "$TOOLS/stylua" --version | grep -q "$STYLUA_VERSION"; then
   echo "bootstrap: stylua $STYLUA_VERSION already installed"
 else
   mkdir -p "$TOOLS"
@@ -65,35 +64,9 @@ else
   chmod +x "$TOOLS/stylua"
 fi
 
-# --- actionlint (workflow static analysis, SHA-256 pinned) -----------------
-ACTIONLINT_VERSION="1.7.12"
-case "$os-$arch" in
-  Linux-x86_64)  al_asset="actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz";  al_sha="8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8" ;;
-  Linux-aarch64|Linux-arm64) al_asset="actionlint_${ACTIONLINT_VERSION}_linux_arm64.tar.gz"; al_sha="325e971b6ba9bfa504672e29be93c24981eeb1c07576d730e9f7c8805afff0c6" ;;
-  Darwin-arm64)  al_asset="actionlint_${ACTIONLINT_VERSION}_darwin_arm64.tar.gz"; al_sha="aba9ced2dee8d27fecca3dc7feb1a7f9a52caefa1eb46f3271ea66b6e0e6953f" ;;
-  Darwin-x86_64) al_asset="actionlint_${ACTIONLINT_VERSION}_darwin_amd64.tar.gz"; al_sha="5b44c3bc2255115c9b69e30efc0fecdf498fdb63c5d58e17084fd5f16324c644" ;;
-esac
-
-if [[ -x "$TOOLS/actionlint" ]] && "$TOOLS/actionlint" -version | head -1 | grep -q "$ACTIONLINT_VERSION"; then
-  echo "bootstrap: actionlint $ACTIONLINT_VERSION already installed"
-else
-  tmp2="$(mktemp -d)"
-  curl -fsSL -o "$tmp2/$al_asset" \
-    "https://github.com/rhysd/actionlint/releases/download/v$ACTIONLINT_VERSION/$al_asset"
-  if command -v sha256sum >/dev/null 2>&1; then
-    actual="$(sha256sum "$tmp2/$al_asset" | cut -d' ' -f1)"
-  else
-    actual="$(shasum -a 256 "$tmp2/$al_asset" | cut -d' ' -f1)"
-  fi
-  [[ "$actual" == "$al_sha" ]] || die "actionlint checksum mismatch: $actual"
-  tar -xzf "$tmp2/$al_asset" -C "$TOOLS" actionlint
-  rm -rf "$tmp2"
-fi
-
 echo "bootstrap: done"
 export LUA_PATH="$ROCKS/share/lua/5.1/?.lua;$ROCKS/share/lua/5.1/?/init.lua;;"
 export LUA_CPATH="$ROCKS/lib/lua/5.1/?.so;;"
 "$ROCKS/bin/busted" --lua=luajit --version
 "$ROCKS/bin/luacheck" --version | head -1
 "$TOOLS/stylua" --version
-"$TOOLS/actionlint" -version | head -1

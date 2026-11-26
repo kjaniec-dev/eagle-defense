@@ -46,9 +46,9 @@ make evidence    # review evidence package → evidence/
 - [Technical design](docs/TECHNICAL_DESIGN.md)
 - [Art direction](docs/ART_DIRECTION.md)
 - [Roadmap](docs/ROADMAP.md)
-- [CI runner setup](docs/CI_RUNNER.md)
+- [CI](docs/CI.md)
 - [Agent instructions](AGENTS.md)
 
 ## License
 
-Proprietary. All rights reserved. See [LICENSE](LICENSE). Third-party tooling used only for development (busted, luacheck, StyLua, actionlint) is not distributed with the game.
+Proprietary. All rights reserved. See [LICENSE](LICENSE). Third-party tooling used only for development (busted, luacheck, StyLua, shellcheck) is not distributed with the game.

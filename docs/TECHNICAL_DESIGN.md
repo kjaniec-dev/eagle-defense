@@ -11,7 +11,7 @@ Status: **APPROVED v1.0** (owner, 2026-11-26). Contract changes require owner ap
 | Test runner | busted 2.3.0, run with `--lua=luajit` | Installed into a project-local `.rocks/` tree (gitignored) |
 | Linter | luacheck 1.2.0 | `std = luajit + love` |
 | Formatter | StyLua 2.6.0 | Release binary, pinned by SHA-256 |
-| Workflow / shell lint | actionlint 1.7.12 (SHA-256 pinned), shellcheck (system) | Run as part of `make lint` |
+| Shell lint | shellcheck (system package) | Run as part of `make lint` when installed |
 
 12.0 migration policy: avoid APIs that are deprecated in 12. Any migration requires an approved technical decision.
 
@@ -131,12 +131,12 @@ The half-tile character grid is human-readable and diffable. Partial-brick autho
 
 | Layer | Tool | Runs where |
 |---|---|---|
-| Unit (core, sim, serialize, input mapping) | busted + LuaJIT, no LÖVE | sandbox + CI |
-| Scenario / golden replays | busted: load level + replay → assert state hash at checkpoints | sandbox + CI |
-| Level and save validation | `tools/validate_levels.lua`, spec tests | sandbox + CI |
-| Architecture boundary | spec that scans `src/sim` and `src/core` | sandbox + CI |
-| Headless smoke | `love . --smoke=N` under Xvfb with `SDL_AUDIODRIVER=dummy`: runs N ticks, saves a PNG of the canvas, exits 0 | sandbox (verified feasible: Mesa llvmpipe GL 4.5) + Linux CI |
-| Native macOS | owner, or a macOS self-hosted runner | see §13 |
+| Unit (core, sim, serialize, input mapping) | busted + LuaJIT, no LÖVE | local `make check` (+ CI when enabled) |
+| Scenario / golden replays | busted: load level + replay → assert state hash at checkpoints | local `make check` (+ CI when enabled) |
+| Level and save validation | `tools/validate_levels.lua`, spec tests | local `make check` (+ CI when enabled) |
+| Architecture boundary | spec that scans `src/sim` and `src/core` | local `make check` (+ CI when enabled) |
+| Headless smoke | `love . --smoke=N` under Xvfb with `SDL_AUDIODRIVER=dummy`: runs N ticks, saves a PNG of the canvas, exits 0 | sandbox (verified feasible: Mesa llvmpipe GL 4.5) + Linux CI when enabled |
+| Native macOS | owner, or a macOS GitLab runner later | see §13 |
 
 Golden fixtures are regenerated only by an explicit `tools/update_goldens.lua`, and every regeneration is called out in the PR.
 
@@ -144,12 +144,8 @@ Golden fixtures are regenerated only by an explicit `tools/update_goldens.lua`, 
 
 - `make bootstrap` installs the rocks into `.rocks/` and downloads the pinned StyLua.
 - `make check` runs `fmt-check`, `lint`, `test`, `validate` and `smoke` (smoke only when `love` and `xvfb-run` exist).
-- GitHub Actions run on **self-hosted runners only**. **No runners are currently registered** for this repo or for the owner's other repos (which use `ubuntu-latest`). Proposal:
-  - `runs-on: [self-hosted, Linux, eagle-defense]`: lint, test, validate, headless smoke, `.love` build.
-  - `runs-on: [self-hosted, macOS, ARM64, eagle-defense]` (optional, owner's Mac): native smoke run and `.app` packaging.
-- ⚠ **The repository is public.** GitHub recommends against self-hosted runners on public repos, because fork PRs could execute code on the runner. Mitigations, which need an owner decision:
-  - make the repo private until release, **or**
-  - restrict the workflows to `push` and same-repo `pull_request`, and require approval for outside contributors' workflow runs, and use an ephemeral or containerized runner.
+- **Current gate: `make check` run locally.** CI is deferred by owner decision (2026-11-26).
+- **Target CI: the company GitLab with self-hosted runners.** The project will move from GitHub. The Makefile is the CI contract, so the pipeline only runs `make bootstrap && make check && make love` (see `docs/CI.md`).
 
 ## 12. Packaging (G0: `.love` only; full in G9)
 
@@ -160,7 +156,7 @@ Golden fixtures are regenerated only by an explicit `tools/update_goldens.lua`, 
 
 ## 13. Native macOS acceptance
 
-1. CI builds a `.app` (unsigned during development) and attaches it with checksums as an artifact. Alternatively, the owner runs `love .` with LÖVE 11.5 installed.
+1. The owner runs `love .` with LÖVE 11.5 installed, or a `.love` from `make love`. Once GitLab CI exists, it can also build an unsigned `.app` artifact.
 2. The owner follows `docs/acceptance/<milestone>-macos.md`, a checklist covering launch, window/fullscreen toggle, scaling at native Retina resolution, input feel, gamepad, audio, a 10-minute stability run and the F3 overlay FPS.
 3. Evidence is recorded in that file: Mac model, chip, macOS version, LÖVE version, commit SHA, screenshots and pass/fail per item.
 4. Sandbox evidence (Linux arm64, Xvfb, software GL) is always labelled **"automated sandbox evidence"** and never presented as native validation.
@@ -169,12 +165,13 @@ Golden fixtures are regenerated only by an explicit `tools/update_goldens.lua`, 
 
 | Risk | Impact | Mitigation |
 |---|---|---|
-| No self-hosted runner exists, and the repo is public | CI blocked or insecure | Owner registers a runner and decides on repo visibility before G0 closes |
+| CI deferred until the move to company GitLab | Regressions slip through if `make check` is skipped | `make check` output is mandatory in every evidence package. Set up the GitLab pipeline before G9 at the latest. |
+| Proprietary code in a **public** GitHub repo | Code is exposed before release | Make the repo private, or remove it after the move to GitLab (owner decision) |
 | Reference behavior largely unverified | Feel deviates from the classic | Data-driven constants, calibration pass in G1/G4, values marked UNV |
 | Original art quality from an AI-driven pipeline | The "commercial quality" bar may not be met | Early G3 slice and an owner decision on commissioning an artist (see ART_DIRECTION §7) |
 | LÖVE 11.5 is aging (2023), and 12.0 is unreleased | Future OS/SDL issues, especially on macOS | Pin 11.5, keep API usage conservative, re-evaluate 12.0 at G9 |
 | macOS signing and notarization | Gatekeeper blocks the release | Apple Developer account before G9 |
 | Steamworks from Lua needs a native module | Packaging complexity | Steam integration is optional. Decide in G9; a release without Steamworks is valid. |
 | Software-GL sandbox ≠ real GPU | Shader bugs missed | Native acceptance per milestone with shaders; GL 2.1-safe GLSL |
-| Determinism across platforms | Replay/golden mismatches | Integer-only sim math, own RNG, ordered iteration, hash checks in CI |
+| Determinism across platforms | Replay/golden mismatches | Integer-only sim math, own RNG, ordered iteration, hash checks in `make check` |
 | Trademark/name not cleared | Rebrand late | Pre-release trademark search task (G9 checklist) |

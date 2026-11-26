@@ -16,7 +16,7 @@ The next milestone never starts automatically.
 
 | ID | Milestone | Key exit criteria | Native macOS acceptance |
 |---|---|---|---|
-| **G0** | Project foundation | The skeleton runs; fixed-step loop and scaling work; input abstraction; the test, lint and format toolchain; CI on a self-hosted runner; documentation. | Yes (launch, scaling, input smoke) |
+| **G0** | Project foundation | The skeleton runs; fixed-step loop and scaling work; input abstraction; the test, lint and format toolchain; CI deferred (target: company GitLab), with `make check` run locally as the gate; documentation. | Yes (launch, scaling, input smoke) |
 | G1 | Core combat | Player movement, turn snapping, shooting, bullets, tank/bullet collisions, test arena, golden replay. *Proposed addition: a static art-direction spike screenshot (24 px vs 32 px), so art feedback arrives early.* | Yes (feel) |
 | G2 | Battlefield and destruction | Cell grid, partial brick, steel, water, forest, ice, level format + loader + validator | Optional |
 | G3 | Visual vertical slice | Final-quality Classic environment, tanks, HQ, effects, lighting and bloom prototype, pixel-perfect pipeline. **Owner art approval gate.** | Yes (visuals on a real display) |
@@ -64,16 +64,12 @@ The next milestone never starts automatically.
    - `tools/build_love.sh`: the `.love` artifact plus SHA-256.
    - `tools/evidence.sh`: builds a tar.gz containing the SHA, diff, test/lint output, smoke screenshot, summary template and `SHA256SUMS`.
 8. **Tests:** busted specs for loop (frame-rate independence: the same tick count for 30/60/144 Hz frame sequences), rng (known sequence plus round-trip), statemachine, serialize (including malicious input rejection), viewport math, input mapper and the boundary scan.
-9. **CI** (`.github/workflows/ci.yml`)
-   - Triggers: `push` and same-repo `pull_request`, using `runs-on: [self-hosted, Linux, eagle-defense]`.
-   - Steps: bootstrap (cached), then `make check`, including the Xvfb smoke. The `.love` and the smoke PNG are uploaded as artifacts.
-   - An optional macOS job is guarded by the `[self-hosted, macOS, ARM64, eagle-defense]` labels and a repo variable `MACOS_RUNNER=1`.
-   - `docs/CI_RUNNER.md` has runner setup instructions for the owner.
-10. **Docs:** README (run, test, controls), AGENTS.md, CLAUDE.md, this roadmap, `docs/acceptance/G0-macos.md`.
+9. **CI:** deferred by the owner on 2026-11-26. The target is the company GitLab with self-hosted runners. `docs/CI.md` holds the pipeline contract (`make bootstrap && make check`). A GitHub Actions workflow was drafted and then removed.
+10. **Docs:** README (run, test, controls), AGENTS.md, CLAUDE.md, this roadmap, `docs/CI.md`, `docs/acceptance/G0-macos.md`.
 
 **G0 acceptance criteria**
 - `make check` passes in the sandbox.
-- CI passes on the self-hosted runner, **or**, if no runner is registered by then, this is explicitly reported as a blocker.
+- ~~CI passes on the self-hosted runner~~. **CI is deferred** (owner, 2026-11-26). `make check` passing locally is the gate, and its output goes into the evidence package. The CI pipeline will be added on the company GitLab.
 - `love .` opens a window showing the scaled test pattern; P1 (WASD/Space) and P2 (arrows) move the debug markers; Alt+Enter toggles fullscreen; F3 shows the overlay.
 - The macOS checklist is executed by the owner.
 
@@ -81,7 +77,7 @@ The next milestone never starts automatically.
 
 | # | Topic | Decision |
 |---|---|---|
-| Q-G0-1 | Runner hosting: where, which labels, and should the macOS runner be the owner's Mac? | Linux runner + optional Mac runner, as above |
-| Q-G0-2 | Public repo + self-hosted runner: make it private, or restrict triggers? | Make the repo private until release. The owner performs the change. Until then, CI triggers are restricted to same-repo events. |
+| Q-G0-1 | Runner hosting: where, which labels, and should the macOS runner be the owner's Mac? | **CI deferred** (owner, 2026-11-26). For now we test locally with `make check`. CI will run on the company GitLab with self-hosted runners. |
+| Q-G0-2 | Public repo + self-hosted runner: make it private, or restrict triggers? | No GitHub runner will be used, so the runner risk is gone. The code is still proprietary and public on GitHub: make the repo private or remove it after the move to GitLab (owner). |
 | Q-G0-3 | Source license | Proprietary, all rights reserved |
 | Q-G0-4 | Move the static art spike into G1? | Yes |

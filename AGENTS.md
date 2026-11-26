@@ -26,7 +26,7 @@ love .           # run the game
 - **Placeholders:** placeholder assets must carry `PLACEHOLDER` in their filename and their manifest entry.
 - **Tests:** add tests with each behavior change, and add a regression test for each bug fixed. Golden fixtures may be regenerated only with `tools/update_goldens.lua`, and the regeneration must be called out in the PR.
 - **Evidence:** keep sandbox evidence (Linux, Xvfb, software GL) separate from native evidence. Never claim native rendering, audio, performance or controller behavior was verified unless it was actually tested on that platform.
-- **CI:** self-hosted GitHub runners only.
+- **CI:** deferred. The target is the company GitLab with self-hosted runners (`docs/CI.md`). Until then, run `make check` locally before every PR/MR and include its output in the evidence.
 - **Git:** work on a milestone branch and open a Draft PR. **Never merge without explicit owner authorization**, and never start the next milestone automatically.
 - **Dependencies:** no new runtime dependencies or frameworks (ECS, OOP libraries, etc.) without approval.
 

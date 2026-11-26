@@ -6,7 +6,6 @@ TOOLS      := $(CURDIR)/.tools
 BUSTED     := $(ROCKS)/bin/busted
 LUACHECK   := $(ROCKS)/bin/luacheck
 STYLUA     := $(TOOLS)/stylua
-ACTIONLINT := $(TOOLS)/actionlint
 LUAJIT     ?= luajit
 LOVE       ?= love
 SMOKE_TICKS ?= 120
@@ -23,7 +22,7 @@ help:
 	@echo "bootstrap  install pinned toolchain (.rocks/, .tools/)"
 	@echo "fmt        format Lua sources with StyLua"
 	@echo "fmt-check  verify formatting"
-	@echo "lint       luacheck + actionlint"
+	@echo "lint       luacheck + shellcheck"
 	@echo "test       busted unit/scenario tests (LuaJIT)"
 	@echo "validate   architecture boundaries + asset manifest"
 	@echo "smoke      headless LÖVE run (Xvfb) with PNG capture"
@@ -42,7 +41,6 @@ fmt-check:
 
 lint:
 	$(LUACHECK) $(LUA_SOURCES)
-	$(ACTIONLINT) -shellcheck=
 	@if command -v shellcheck >/dev/null 2>&1; then shellcheck tools/*.sh && echo "shellcheck: OK"; \
 	else echo "shellcheck: not installed (skipped)"; fi
 
