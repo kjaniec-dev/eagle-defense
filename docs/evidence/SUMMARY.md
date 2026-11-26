@@ -8,11 +8,11 @@ Standalone tooling PR between G0 (merged as `550a9f1`) and G1. It contains no ga
 | Original native Retina smoke | native (owner) | **FAIL**: canvas created at display DPI (1280×720 texels), root-caused |
 | Linux sandbox reproduction of that failure | sandbox, simulated DPI defaults | **PASS**: byte-identical to the native PNGs |
 | Fix, strengthened smoke and HiDPI harness: Linux `make check` | sandbox + SIMULATED HiDPI | **PASS** |
-| Corrected native Retina rendering at 800x600 | native (owner) | **PASS**: in-app SMOKE OK, all values exact; canvas and window PNGs byte-identical to the sandbox renders |
-| Native shell smoke wrapper | native (owner) | **FAIL**: BSD `od` extra empty line parsed as `0x0`; fixed here, native re-run pending |
-| Native 1024x640 / 1280x720 / HiDPI harness | native | **NOT RUN** (wrapper aborted after 800x600) |
-| Full native `make check` | native (owner) | **FAIL** (wrapper only); fmt-check, lint, shellcheck, 186 tests, validate PASS |
+| Corrected native Retina rendering at 800x600 (run of `2009213`) | native (owner) | **PASS**: in-app SMOKE OK, all values exact; canvas and window PNGs byte-identical to the sandbox renders |
+| Native shell smoke wrapper (run of `2009213`) | native (owner) | **FAIL**: BSD `od` extra empty line parsed as `0x0`; fixed in `2e4469a` |
 | Portability fix: Linux `make check` + emulated macOS userland | sandbox | **PASS** |
+| **Final native acceptance of `2e4469a`** | native (owner, Apple M3 Pro) | **PASS**: fmt-check, lint 0/0 (51 files), shellcheck, 196 tests, validate; smoke 800x600 / 1024x640 / 1280x720 exact; HiDPI harness (SIMULATED defaults) 8/8 |
+| BSD `grep: empty (sub)expression` in the harness | native (owner) | non-blocking (diagnostic label only); G1 follow-up |
 
 ## Problem
 G0 installed native tools into one flat location (`.rocks/bin`, `.rocks/lib`, `.tools/stylua`). The macOS host and the Docker sandbox mount the same checkout, so whichever ran `make bootstrap` last overwrote the other's binaries. For example, the sandbox left Linux arm64 ELF files (`stylua`, `lfs.so`, `system/core.so`, `term/core.so`) where macOS expected Mach-O.
@@ -67,7 +67,8 @@ G0 installed native tools into one flat location (`.rocks/bin`, `.rocks/lib`, `.
 - `make bootstrap` and `make check` ran in the sandbox (linux-arm64). `hidpi-sim/` results are SIMULATED HiDPI evidence.
 - Native, owner-reported: `make bootstrap` / `make check` toolchain steps on macOS (darwin-arm64) PASS, with both platform trees coexisting. The original native Retina smoke FAILED (fixed here).
 - Native, owner-reported (corrected version, `2009213`): Retina rendering at 800x600 PASS; wrapper FAIL (fixed here); full `make check` FAIL because of the wrapper only.
-- **Pending native:** a full re-run on the new head covering 800x600, 1024x640, 1280x720, the HiDPI harness and `make check` (`docs/acceptance/PR2-macos-retina.md`).
+- Native, owner-reported (final, `2e4469a`): full `make check` PASS, including the three Retina smoke sizes and the HiDPI harness (SIMULATED defaults on a real DPI-2 window). The numeric exit status is not in the log; the log is complete with no `make` error. Artifacts in `native-evidence/pr2-final-native-acceptance-2e4469a-2026-11-26/`, hashes and analysis in `docs/evidence/PR2-native-macos.md` §5. Sandbox renders at the same physical sizes are byte-identical to the native integer-mode windows.
+- Follow-up for G1 (not part of PR #2): `tools/hidpi_sim.sh` `labels_for_problems` uses an empty regex alternative that BSD grep rejects, so the `other-check` diagnostic label is lost on macOS. Failure detection is unaffected. Requirements are in §5.
 
 ## Not changed
 No gameplay or simulation changes. CI stays disabled. No new runtime or tooling dependencies (the harness uses LÖVE, bash, perl, `cmp` and `od`, all already used by the existing tooling). No BMAD.

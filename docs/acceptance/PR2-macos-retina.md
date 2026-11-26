@@ -3,29 +3,28 @@
 Fill this in on a real Mac with a Retina (HiDPI) display. Sandbox evidence (Linux, Xvfb, software GL) and the SIMULATED HiDPI harness do **not** count here.
 Root cause and history: `docs/evidence/PR2-native-macos.md`.
 
-**Status: PARTIAL — re-run required.**
+**Status: PASS — final native acceptance of `2e4469a6b4cdeabd146920a1be198bf54c7d49f4` (owner, 2026-11-26).**
 
-| Item (owner's run of `2009213`, 2026-11-26) | Status |
+| Item | Status |
 |---|---|
-| Retina rendering at 800x600 (in-app smoke, all values as in the table below) | **PASS** |
-| Shell smoke wrapper | **FAIL**: BSD `od` portability defect after SMOKE OK (fixed after `2009213`) |
-| 1024x640 | **NOT RUN** |
-| 1280x720 | **NOT RUN** |
-| HiDPI harness on the Mac | **NOT RUN** |
-| Full `make check` | **FAIL** (wrapper only) |
+| Owner's run of `2009213`: Retina rendering at 800x600 | **PASS**; shell wrapper **FAIL** (BSD `od`), fixed in `2e4469a` |
+| Owner's run of `2e4469a`: fmt-check, lint, shellcheck, 196 tests, validate | **PASS** |
+| Native smoke 800x600 / 1024x640 / 1280x720 + wrapper | **PASS** 3/3, every value exact |
+| HiDPI harness on the Mac (SIMULATED defaults, integer window 1280x720) | **PASS** 8/8 |
+| BSD `grep: empty (sub)expression` during the harness | non-blocking, G1 follow-up |
 
-Details: `docs/evidence/PR2-native-macos.md` §4. Re-run everything below on the new PR head, including 800x600.
+Details, artifact hashes and the follow-up: `docs/evidence/PR2-native-macos.md` §5. Artifacts: `native-evidence/pr2-final-native-acceptance-2e4469a-2026-11-26/`.
 
 ## Environment
 
 | Field | Value |
 |---|---|
-| Date | |
-| Mac model / chip | |
-| macOS version | |
-| Display / "looks like" resolution / DPI scale | |
-| LÖVE version (`love --version`) | (project pins 11.5) |
-| Commit SHA (`git rev-parse HEAD`) | must equal the PR #2 HEAD under review |
+| Date | 2026-11-26 |
+| Mac model / chip | Apple M3 Pro |
+| macOS version | not reported (`os=OS X`) |
+| Display / "looks like" resolution / DPI scale | DPI scale 2.00 (from the smoke lines) |
+| LÖVE version (`love --version`) | not reported (project pins 11.5); renderer `OpenGL / 4.1 Metal - 91.7` |
+| Commit SHA (`git rev-parse HEAD`) | `2e4469a6b4cdeabd146920a1be198bf54c7d49f4` (owner-reported) |
 
 ## Run (from a logged-in GUI session, in the repo root)
 
@@ -68,14 +67,14 @@ Each line must also contain `ticks=120`, `state=sandbox`, `p1=5600,4992 p2=4256,
 
 | # | Check | Expected | Pass/Fail | Notes |
 |---|---|---|---|---|
-| 1 | Toolchain | `make toolchain` → `darwin-arm64`; fmt-check, lint, test and validate pass | | |
-| 2 | Smoke 800x600 | Row above, `SMOKE OK`; no `unexpected canvas size` | | |
-| 3 | Smoke 1024x640 | Row above, `SMOKE OK` | | |
-| 4 | Smoke 1280x720 | Row above, `SMOKE OK` | | |
-| 5 | HiDPI harness (SIMULATED, on a real HiDPI window) | `hidpi-sim: OK`, 8 × `CASE … PASS` | | |
-| 6 | Visual (optional) | `love .`: test-pattern text is as blocky as the 1× grid (no finer 2× glyph detail); F3 overlay text is crisp | | |
-| 7a | Wrapper | `smoke: OK (800x600 1024x640 1280x720) on Darwin`; `make check` exits 0 | | |
-| 7b | `od` fixture | `od fixture: match` | | |
-| 7 | Isolation | `.rocks/linux-arm64` and `.tools/linux-arm64` still present after the Mac run | | |
+| 1 | Toolchain | `make toolchain` → `darwin-arm64`; fmt-check, lint, test and validate pass | PASS | `.tools/darwin-arm64`, lint 0/0 in 51 files, 196/0/0/0 |
+| 2 | Smoke 800x600 | Row above, `SMOKE OK`; no `unexpected canvas size` | PASS | exact |
+| 3 | Smoke 1024x640 | Row above, `SMOKE OK` | PASS | exact |
+| 4 | Smoke 1280x720 | Row above, `SMOKE OK` | PASS | exact |
+| 5 | HiDPI harness (SIMULATED, on a real HiDPI window) | `hidpi-sim: OK`, 8 × `CASE … PASS` | PASS | integer window 1280x720; BSD grep warning, G1 follow-up |
+| 6 | Visual (optional) | `love .`: test-pattern text is as blocky as the 1× grid (no finer 2× glyph detail); F3 overlay text is crisp | not reported | |
+| 7a | Wrapper | `smoke: OK (800x600 1024x640 1280x720) on Darwin`; `make check` exits 0 | PASS | wrapper line present; numeric exit status not in the log (`tee`), log complete with no `make: ***` |
+| 7b | `od` fixture | `od fixture: match` | not reported | the wrapper passed on real BSD `od` |
+| 7 | Isolation | `.rocks/linux-arm64` and `.tools/linux-arm64` still present after the Mac run | PASS | checked from the sandbox on the shared checkout; both StyLua hashes unchanged |
 
 Attach `build/native-check.log` and `build/smoke*.png` / `build/smoke*.log`. Move them out of `build/` (e.g. to a new `native-evidence/<set>/` with a `SHA256SUMS`) if they need to survive `make clean`.

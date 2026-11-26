@@ -9,13 +9,14 @@ The results below are recorded separately on purpose. The toolchain isolation re
 | Original native Retina smoke (before the fix) | native (owner) | **FAIL**, root cause in §2 |
 | Linux sandbox reproduction of the native failure | sandbox, simulated DPI defaults | **PASS**: byte-identical reproduction (§2) |
 | Fix + strengthened checks + HiDPI harness, Linux `make check` | sandbox / SIMULATED HiDPI | **PASS** (§3) |
-| Corrected native Retina rendering at 800x600 (in-app smoke) | native (owner) | **PASS** (§4) |
-| Native shell smoke wrapper (`tools/smoke.sh`) | native (owner) | **FAIL**: BSD `od` portability defect after SMOKE OK; fixed in §4, native re-run pending |
-| Native smoke 1024x640 | native | **NOT RUN** (wrapper aborted after 800x600) |
-| Native smoke 1280x720 | native | **NOT RUN** |
-| Native HiDPI harness (SIMULATED defaults on a real HiDPI window) | native host | **NOT RUN** |
-| Full native `make check` | native (owner) | **FAIL**, only because of the wrapper; fmt-check, lint, shellcheck, 186 tests and validate PASS |
+| Corrected native Retina rendering at 800x600 (in-app smoke, run of `2009213`) | native (owner) | **PASS** (§4) |
+| Native shell smoke wrapper, run of `2009213` | native (owner) | **FAIL**: BSD `od` portability defect after SMOKE OK; fixed in `2e4469a` (§4) |
 | Portability fix: Linux `make check` + macOS-userland emulation | sandbox | **PASS** (§4) |
+| **Final native acceptance of `2e4469a`** (§5) | native (owner) | **PASS** |
+| ↳ fmt-check, lint (0/0 in 51 files), shellcheck, busted 196/0/0/0, boundaries, assets, DPI | native (owner) | **PASS** |
+| ↳ Native Retina smoke 800x600, 1024x640, 1280x720 + shell wrapper | native (owner) | **PASS** 3/3, every value exact |
+| ↳ HiDPI harness on the Mac (SIMULATED resource defaults on a real DPI-2 window; integer window 1280x720) | native host, SIMULATED defaults | **PASS** 8/8 |
+| ↳ BSD `grep: empty (sub)expression` in the harness | native (owner) | non-blocking; diagnostic label only, G1 follow-up (§5) |
 
 ## 1. Native toolchain isolation — PASS (native evidence, reported by the owner)
 | Check | Result |
@@ -226,5 +227,91 @@ With bash 3.2.57, Apple `od` (built as above) and `LANG=pl_PL.UTF-8`, under Xvfb
 
 With a fake `love` that writes chosen canvas headers, the wrapper accepts 640x360 and rejects 1280x720 (the original Retina shape), a truncated header and a non-PNG file. The full Linux `make check` result is in `docs/evidence/SUMMARY.md`.
 
-What this does **not** prove: Apple's shipped `od` binary and macOS libc were emulated, not run. The native re-run in `docs/acceptance/PR2-macos-retina.md` remains required for 1024x640, 1280x720, the harness and the full `make check`.
+What this does **not** prove: Apple's shipped `od` binary and macOS libc were emulated, not run. The full native re-run followed, see §5.
 
+## 5. Final native acceptance of `2e4469a` (2026-11-26) — PASS (native evidence, owner's run)
+Host: Apple M3 Pro, renderer `OpenGL / 4.1 Metal - 91.7 / Apple / Apple M3 Pro`, display DPI 2.00. The owner reported the tested HEAD as `2e4469a6b4cdeabd146920a1be198bf54c7d49f4`. The log does not record the commit, but its 196 tests, 51 linted files and `tests/tools/portable_sh_spec.lua` match `2e4469a`. The owner ran `make check` with the build directory set to `build/native-macos-PBmEsl/` and the harness integer window overridden to 1280x720 (the documented fallback in the acceptance checklist).
+
+| Step | Native result (from `native-check.log`) |
+|---|---|
+| fmt-check (StyLua, `.tools/darwin-arm64`) | PASS (no output, next target ran) |
+| lint | `0 warnings / 0 errors in 51 files` |
+| shellcheck | `shellcheck: OK` |
+| busted | `196 successes / 0 failures / 0 errors / 0 pending` |
+| validate | `boundaries: OK`, `assets: OK`, `dpi: OK (17 files in src/ checked)` |
+| smoke | 3 × `SMOKE OK` (below); `smoke: OK (800x600 1024x640 1280x720) on Darwin` |
+| hidpi-sim (SIMULATED resource defaults) | 8 × `CASE … PASS`; `hidpi-sim: OK (integer 1280x720, fit 900x600; scales 1 1.25 1.5 2)` |
+
+Native smoke lines (`out=` paths elided). Every value equals its row in `docs/acceptance/PR2-macos-retina.md`:
+
+```text
+SMOKE OK ticks=120 state=sandbox p1=5600,4992 p2=4256,3552 logical=800x600 physical=1600x1200 dpi=2.00 screenshot=1600x1200 mode=integer canvas=640x360 canvas_dpi=1.00 scale=2 offset=160,240 pixels_checked=921600 expected_checked=921600 mismatches=0 letterbox_checked=998400 expected_letterbox=998400 letterbox_bad=0 problems=none
+SMOKE OK ticks=120 state=sandbox p1=5600,4992 p2=4256,3552 logical=1024x640 physical=2048x1280 dpi=2.00 screenshot=2048x1280 mode=integer canvas=640x360 canvas_dpi=1.00 scale=3 offset=64,100 pixels_checked=2073600 expected_checked=2073600 mismatches=0 letterbox_checked=547840 expected_letterbox=547840 letterbox_bad=0 problems=none
+SMOKE OK ticks=120 state=sandbox p1=5600,4992 p2=4256,3552 logical=1280x720 physical=2560x1440 dpi=2.00 screenshot=2560x1440 mode=integer canvas=640x360 canvas_dpi=1.00 scale=4 offset=0,0 pixels_checked=3686400 expected_checked=3686400 mismatches=0 letterbox_checked=0 expected_letterbox=0 letterbox_bad=0 problems=none
+```
+
+Harness (SIMULATED resource DPI defaults 1, 1.25, 1.5, 2 on a real DPI-2 window): every case printed the expected `HIDPI_SIM SIMULATED default_dpi=…` probe (formatted by `printf_c`) and `SMOKE OK … problems=none`. Integer cases: 2560x1440 physical, scale 4. Fit cases: 1800x1200 physical, prescale 3, `prescale_mismatches=0`, `blended=48342`. All eight canvases are the same file, and within each mode all four window PNGs are byte-identical, which is the harness's `content-vs-reference` check.
+
+**`make` exit status:** the numeric exit status is not recorded in the log (`make check 2>&1 | tee` does not capture it). The log runs through the last prerequisite of `check` (`hidpi-sim: OK`) with no `make: ***` line. That is consistent with exit 0, and the owner reports overall PASS.
+
+Not reported in this run: the `bash --version` line, the `od` fixture `cmp` (checklist 7b) and the optional visual check. The wrapper passing on real BSD `od` exercises the fixed reader natively. Toolchain isolation, checked afterwards on the shared checkout from the sandbox: `.rocks` and `.tools` hold both `darwin-arm64` and `linux-arm64`; `.tools/linux-arm64/stylua` is still `f3102639…2993` and `.tools/darwin-arm64/stylua` is still `c36d9bd2…4149`.
+
+### Preserved artifacts
+Copied unchanged (byte-compared) from `build/native-macos-PBmEsl/` to `native-evidence/pr2-final-native-acceptance-2e4469a-2026-11-26/` (outside Git, survives `make clean`) before any further sandbox command. `make evidence` verifies these hashes.
+
+| File | SHA-256 |
+|---|---|
+| `hidpi-sim/fit-dpi1-window.png` | `894bda8ba4a71dcfd390e9b54f164aab25dce4069d03600235896f400173ff21` |
+| `hidpi-sim/fit-dpi1.25-window.png` | `894bda8ba4a71dcfd390e9b54f164aab25dce4069d03600235896f400173ff21` |
+| `hidpi-sim/fit-dpi1.25.log` | `d82e15529f1175d4405dfcdfa43aea868ddd0ceeadc7b592184277ff7f25daf4` |
+| `hidpi-sim/fit-dpi1.25.png` | `0bb5bb198021179823c555e5754fb2a64cf53b32d0e597daef17d73fcce47cde` |
+| `hidpi-sim/fit-dpi1.5-window.png` | `894bda8ba4a71dcfd390e9b54f164aab25dce4069d03600235896f400173ff21` |
+| `hidpi-sim/fit-dpi1.5.log` | `bd861a00b15b93383c9444552e3af1de43e9c2bf2c770e32b7e84eba6cbb14c4` |
+| `hidpi-sim/fit-dpi1.5.png` | `0bb5bb198021179823c555e5754fb2a64cf53b32d0e597daef17d73fcce47cde` |
+| `hidpi-sim/fit-dpi1.log` | `c7c5ede60ea240e0170bfee3a653ebcd4bfe627cd2c637def55f318b638b3c41` |
+| `hidpi-sim/fit-dpi1.png` | `0bb5bb198021179823c555e5754fb2a64cf53b32d0e597daef17d73fcce47cde` |
+| `hidpi-sim/fit-dpi2-window.png` | `894bda8ba4a71dcfd390e9b54f164aab25dce4069d03600235896f400173ff21` |
+| `hidpi-sim/fit-dpi2.log` | `0e2a3e5cac772ca15b276f29abaca967ac73a72bd4c73f9913d27c62f1311cb8` |
+| `hidpi-sim/fit-dpi2.png` | `0bb5bb198021179823c555e5754fb2a64cf53b32d0e597daef17d73fcce47cde` |
+| `hidpi-sim/integer-dpi1-window.png` | `0daa72649838ac165463f5586e9b918bf6064c7bfb2b1cfb5a76a334a8eefed8` |
+| `hidpi-sim/integer-dpi1.25-window.png` | `0daa72649838ac165463f5586e9b918bf6064c7bfb2b1cfb5a76a334a8eefed8` |
+| `hidpi-sim/integer-dpi1.25.log` | `3e0165b129330adea80e5e4059492be6f9688c0551f951ea704184db89f8856c` |
+| `hidpi-sim/integer-dpi1.25.png` | `0bb5bb198021179823c555e5754fb2a64cf53b32d0e597daef17d73fcce47cde` |
+| `hidpi-sim/integer-dpi1.5-window.png` | `0daa72649838ac165463f5586e9b918bf6064c7bfb2b1cfb5a76a334a8eefed8` |
+| `hidpi-sim/integer-dpi1.5.log` | `b387387c66b5932a385c03e02318cd631ae1944dd21df9903807c82712360dc6` |
+| `hidpi-sim/integer-dpi1.5.png` | `0bb5bb198021179823c555e5754fb2a64cf53b32d0e597daef17d73fcce47cde` |
+| `hidpi-sim/integer-dpi1.log` | `485681bd583fa93095c0e87c55d65c1195d453c63900ff48f62bbb0ac7e7ecc9` |
+| `hidpi-sim/integer-dpi1.png` | `0bb5bb198021179823c555e5754fb2a64cf53b32d0e597daef17d73fcce47cde` |
+| `hidpi-sim/integer-dpi2-window.png` | `0daa72649838ac165463f5586e9b918bf6064c7bfb2b1cfb5a76a334a8eefed8` |
+| `hidpi-sim/integer-dpi2.log` | `744a67125cdb292427408c8c47933478fee8141082bc6922b69f886d80c4e657` |
+| `hidpi-sim/integer-dpi2.png` | `0bb5bb198021179823c555e5754fb2a64cf53b32d0e597daef17d73fcce47cde` |
+| `native-check.log` | `bb6871489bc876c077d109c7331355edc681daf13f7471b4c32f827bb0c15945` |
+| `smoke-1024x640-window.png` | `5e621edcc8726586d3d0152af550e74ac374dee6f09594d56be071b2295496c5` |
+| `smoke-1024x640.log` | `805f1471753d15a0bfd3468eed4748866a54bef3f9ae6b848173e0d41bfb4746` |
+| `smoke-1024x640.png` | `0bb5bb198021179823c555e5754fb2a64cf53b32d0e597daef17d73fcce47cde` |
+| `smoke-1280x720-window.png` | `0daa72649838ac165463f5586e9b918bf6064c7bfb2b1cfb5a76a334a8eefed8` |
+| `smoke-1280x720.log` | `adefe07ddc831f8f9dbc132fe305e6cd63d39fd2bb51565a34419e6c6d5773a3` |
+| `smoke-1280x720.png` | `0bb5bb198021179823c555e5754fb2a64cf53b32d0e597daef17d73fcce47cde` |
+| `smoke-window.png` | `d7a904a9028d9dc1d289d72f44b3a48180dbba66bdeba95956010e9d8c40cf16` |
+| `smoke.log` | `657226353b1e8dc9e05cefbf7ab4bac81dacc3d8a4f2c7cc1325a66bd2bdabc4` |
+| `smoke.png` | `0bb5bb198021179823c555e5754fb2a64cf53b32d0e597daef17d73fcce47cde` |
+
+### Sandbox cross-check (sandbox evidence, not native)
+Linux arm64, Xvfb, llvmpipe, at the native physical framebuffer sizes with DPI 1:
+- integer 2048x1280: window PNG `5e621edc…96c5`, **byte-identical** to the native 1024x640 window;
+- integer 2560x1440: window PNG `0daa7264…ed8`, **byte-identical** to the native 1280x720 window and the native integer harness windows;
+- 1600x1200 (§4): byte-identical to the native 800x600 window `d7a904a9…cf16`, again in this run;
+- all canvases `0bb5bb19…de`.
+
+Fit 1800x1200 also passes in the sandbox with the same counts, but its window PNG differs (`blended=48343` vs `48342` natively). This is expected: bilinear interpolation is GPU-dependent, and fit mode is verified by bounds and counts, not byte equality.
+
+### Non-blocking observation: BSD `grep: empty (sub)expression` (G1 follow-up)
+The harness printed `grep: empty (sub)expression` once per case. Cause: `labels_for_problems` in `tools/hidpi_sim.sh` filters known problem codes with `grep -v -E '^(none|…|blended:0.*|)$'`. The trailing empty alternative `|)` is accepted by GNU grep but rejected by the macOS regex library (`REG_EMPTY`). grep exits 2, `|| true` swallows that, and `rest` is always empty on macOS.
+
+Impact: only the diagnostic label `other-check` for *unrecognised* problem codes is lost on macOS. Failure detection is intact. The app prints `SMOKE OK` only with `problems=none` and exits 1 otherwise (`src/app/app.lua`). A case passes only with exit 0 and no labels, and a non-OK line with no recognised label still gets `other-check` from the fallback in `run_case`. Every native case here had `problems=none`, so the filter had nothing to classify. `--mutations` does not use `other-check`, in its expected or forbidden labels.
+
+The owner decided not to reopen the PR #2 implementation. The follow-up for G1 must:
+- remove the empty alternative and filter blank lines explicitly;
+- make a regex or tool error fail the run instead of being swallowed: distinguish grep exit 1 (no match) from 2 (error), or classify in pure bash;
+- add a regression test where an unrecognised problem code yields `other-check`, run under bash 3.2 with BSD-compatible regex semantics;
+- keep every existing failure path.
