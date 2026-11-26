@@ -1,6 +1,14 @@
 # Tooling: per-platform toolchain isolation — evidence summary
 
-Standalone tooling PR between G0 (merged as `550a9f1`) and G1. It contains no gameplay, simulation, rendering or asset changes. The G0 evidence summary is archived in `docs/evidence/G0.md`.
+Standalone tooling PR between G0 (merged as `550a9f1`) and G1. It contains no gameplay, simulation or asset changes. The owner explicitly authorised one narrowly scoped rendering correction as an exception: the Retina pixel-density fix, see "Retina pixel-density fix" below and `docs/evidence/PR2-native-macos.md`. The G0 evidence summary is archived in `docs/evidence/G0.md`.
+
+| Item | Evidence class | Status |
+|---|---|---|
+| Native macOS toolchain isolation | native (owner, Apple M3 Pro) | **PASS** |
+| Original native Retina smoke | native (owner) | **FAIL**: canvas created at display DPI (1280×720 texels), root-caused |
+| Linux sandbox reproduction of that failure | sandbox, simulated DPI defaults | **PASS**: byte-identical to the native PNGs |
+| Fix, strengthened smoke and HiDPI harness: Linux `make check` | sandbox + SIMULATED HiDPI | **PASS** |
+| Corrected native Retina smoke | native | **PENDING**: `docs/acceptance/PR2-macos-retina.md` |
 
 ## Problem
 G0 installed native tools into one flat location (`.rocks/bin`, `.rocks/lib`, `.tools/stylua`). The macOS host and the Docker sandbox mount the same checkout, so whichever ran `make bootstrap` last overwrote the other's binaries. For example, the sandbox left Linux arm64 ELF files (`stylua`, `lfs.so`, `system/core.so`, `term/core.so`) where macOS expected Mach-O.
@@ -36,10 +44,19 @@ G0 installed native tools into one flat location (`.rocks/bin`, `.rocks/lib`, `.
 - `tests/tools/evidence_spec.lua`: per-platform ignored directories keep the tree clean for final evidence.
 - Mutation check: reverting the Makefile to the flat `.rocks`/`.tools` paths makes 4 toolchain tests fail.
 
+## Retina pixel-density fix (owner-approved exception)
+- Root cause: LÖVE 11 creates `newCanvas`/`newFont` at the display DPI unless told otherwise. On Retina the 640×360 game canvas was 1280×720 texels and text was rasterised at 2×. The old smoke check then compared against the wrong texels (949084 false mismatches), and the real defect (2× text detail) sat behind that. Pixel evidence, reproduction and ablation: `docs/evidence/PR2-native-macos.md`.
+- Fix: explicit `dpiscale = 1` for the game canvas and the fit prescale canvas, and DPI scale 1 for the test-pattern font. The F3 overlay font is explicitly native-DPI (screen-space). Invariant: TECHNICAL_DESIGN §2 "Pixel density".
+- Smoke checks before any pixel comparison: canvas = 640×360 texels at DPI 1; screenshot = physical framebuffer; viewport = canvas × scale, inside the window. After the pass, content and letterbox counts must match exactly. Tolerance is unchanged. `--scale-mode=fit` verifies sharp bilinear: exact nearest prescale, then bilinear bounds plus interpolation present.
+- `tools/check_dpi.lua` (validate) statically requires an explicit density on every canvas and font in `src/`.
+- `tools/hidpi_sim.sh` (check, evidence) is SIMULATED HiDPI: implicit DPI defaults forced to 1/1.25/1.5/2, integer + fit, byte-compared with the DPI-1 reference. `--mutations` proves that removing each explicit setting (game canvas, prescale canvas, font), or switching the fit filter to nearest, is detected by its own check.
+- The original native PNGs and log are kept outside Git in `native-evidence/` (survives `make clean`). Their hashes are in `docs/evidence/PR2-native-macos.md`, and `make evidence` verifies and packages them as `native/`.
+- Tests: 186 (156 + 30 new).
+
 ## Evidence class (sandbox: Linux arm64, Xvfb, Mesa llvmpipe — NOT native)
-- `make bootstrap` and `make check` ran in the sandbox (linux-arm64).
-- **Not verified natively:** `make bootstrap` / `make check` on macOS (darwin-arm64). The macOS paths are covered only by the fake-`uname` tests above.
-- **Suggested owner check on the Mac:** `make toolchain`, `make bootstrap`, `make check`. Then confirm that `.rocks/linux-arm64/` and `.tools/linux-arm64/` still exist and that the sandbox's `make check` still passes afterwards.
+- `make bootstrap` and `make check` ran in the sandbox (linux-arm64). `hidpi-sim/` results are SIMULATED HiDPI evidence.
+- Native, owner-reported: `make bootstrap` / `make check` toolchain steps on macOS (darwin-arm64) PASS, with both platform trees coexisting. The original native Retina smoke FAILED (fixed here).
+- **Pending native:** the corrected Retina smoke at 800x600, 1024x640 and 1280x720 (`docs/acceptance/PR2-macos-retina.md`).
 
 ## Not changed
-CI stays disabled. No new runtime or tooling dependencies. No BMAD.
+No gameplay or simulation changes. CI stays disabled. No new runtime or tooling dependencies (the harness uses LÖVE, bash, perl, `cmp` and `od`, all already used by the existing tooling). No BMAD.

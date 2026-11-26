@@ -57,7 +57,8 @@ Native tools are installed per platform, so one checkout can be shared by severa
 - `zip`, `unzip`, `perl`, `od` and `shasum` ship with macOS. GNU `timeout` is **not** required: `tools/smoke.sh` falls back to `gtimeout`, then to `perl`.
 - Smoke opens real windows, so run it from a logged-in GUI session. Do not use SSH without a display or a LaunchDaemon.
 - Default macOS smoke sizes are the logical sizes `800x600 1024x640 1280x720`. These must fit on the display, otherwise the run fails with "window logical size not applied". Override them with `SMOKE_SIZES="..."`.
-- On Retina, physical = logical × 2. The pixel-perfect check runs on physical pixels, so for example logical 1280×720 is verified as 2560×1440 at 4×.
+- On Retina, physical = logical × 2. The pixel-perfect check runs on physical pixels, so for example logical 1280×720 is verified as 2560×1440 at 4×. The game canvas itself must stay 640×360 texels at DPI 1 on every display (TECHNICAL_DESIGN §2, "Pixel density"); the smoke fails with an explicit `problems=canvas_pixels:…;canvas_dpi:…` otherwise.
+- `make check` also runs `tools/hidpi_sim.sh` (SIMULATED HiDPI resource defaults, integer + fit). On macOS it opens real windows at the logical sizes `1366x768` (integer) and `900x600` (fit); override them with `HIDPI_SIM_INTEGER_SIZE` / `HIDPI_SIM_FIT_SIZE` if the display is smaller.
 
 Native macOS smoke results are automated native evidence. They do not replace the owner's manual checklist (`docs/acceptance/`).
 
@@ -65,6 +66,7 @@ Native macOS smoke results are automated native evidence. They do not replace th
 
 - `make evidence` produces **final** review evidence. It fails closed: a clean tree is required (no untracked files, and no ignored files in source paths), every check must pass, the `.love` is built from the exact commit (`git archive`), mandatory files must be present, and checksums are verified before and after archiving.
 - `make evidence-dev` produces a development snapshot from a dirty tree. It is named `*-DEV` and marked "NOT REVIEW EVIDENCE".
+- Packages include `hidpi-sim/` (SIMULATED HiDPI evidence) and `native/`, a copy of every preserved native artifact set in `native-evidence/<set>/`. That directory is gitignored and is **not** removed by `make clean`. Each set must verify against its `SHA256SUMS`, and every hash must be recorded in a committed `docs/evidence/` report; otherwise packaging fails.
 
 ## Later (owner note, 2026-11-26)
 

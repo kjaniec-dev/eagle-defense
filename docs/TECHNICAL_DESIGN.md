@@ -28,6 +28,12 @@ Status: **APPROVED v1.0** (owner, 2026-11-26). Contract changes require owner ap
   - **Fit** (optional): integer pre-scale followed by a single linear upscale ("sharp bilinear").
 - The alternative candidate is 32 px tiles on a 768×432 canvas, which has more sprite detail but non-integer scaling at 1080p. Both will be compared in the G3 prototype.
 
+**Pixel density (invariant, owner-approved 2026-11-26, PR #2):**
+- Internal pixel-art rendering resources use an explicitly controlled pixel density of **1 texel per internal pixel**. This covers the game canvas, the fit-mode prescale canvas, and every canvas and font drawn into them (later also HUD, light and bloom canvases). LÖVE 11 would otherwise create `newCanvas`/`newFont` at the display DPI: on Retina the 640×360 canvas silently became 1280×720 texels and text was rasterised at 2×.
+- **Display DPI affects final presentation only, never the internal game resolution.** Scaling is computed in physical pixels (`render/viewport`), and only the final draw to the window divides by the DPI scale. Window HiDPI support stays enabled (`t.window.highdpi = true`).
+- Screen-space overlays drawn after presentation (e.g. the F3 debug overlay) may intentionally use the native display DPI. They must say so explicitly with a `-- dpi: native (<reason>)` marker on the constructor line.
+- Enforced by: `tools/check_dpi.lua` (static, in `make validate`); the in-app smoke checks (canvas texels and DPI, prescale texels and DPI); and `tools/hidpi_sim.sh` (SIMULATED HiDPI defaults, in `make check`).
+
 ## 3. Main loop
 
 There is a custom `love.run`:
@@ -135,7 +141,9 @@ The half-tile character grid is human-readable and diffable. Partial-brick autho
 | Scenario / golden replays | busted: load level + replay → assert state hash at checkpoints | local `make check` (+ CI when enabled) |
 | Level and save validation | `tools/validate_levels.lua`, spec tests | local `make check` (+ CI when enabled) |
 | Architecture boundary | spec that scans `src/sim` and `src/core` | local `make check` (+ CI when enabled) |
-| Headless smoke | `tools/smoke.sh`: `love . --smoke=N --window=WxH` under Xvfb (Linux) or in a real window (macOS). It runs N ticks of scripted input, captures the canvas and the backbuffer, verifies the integer upscale pixel by pixel in **physical** pixels, and reports logical size, physical size and DPI | sandbox (verified feasible: Mesa llvmpipe GL 4.5) + Linux CI when enabled |
+| Headless smoke | `tools/smoke.sh`: `love . --smoke=N --window=WxH` under Xvfb (Linux) or in a real window (macOS). It runs N ticks of scripted input and captures the canvas and the backbuffer. Before comparing pixels it requires: canvas = configured 640×360 texels at DPI 1; screenshot = physical framebuffer; viewport = canvas × scale, inside the window. It then verifies the integer upscale pixel by pixel in **physical** pixels, with exact content and letterbox pixel counts. It reports logical size, physical size, DPI and the explicit `problems=` list. `--scale-mode=fit` verifies the sharp-bilinear path instead: an exact nearest prescale, then bilinear bounds plus evidence of interpolation | sandbox (verified feasible: Mesa llvmpipe GL 4.5) + Linux CI when enabled |
+| HiDPI regression (SIMULATED) | `tools/hidpi_sim.sh` runs the real app with LÖVE's implicit resource-DPI defaults forced to 1, 1.25, 1.5 and 2, in integer and fit modes. It requires SMOKE OK, plus canvas and window byte-identical to the DPI-1 reference. `--mutations` proves that removing each explicit DPI setting is detected by its own check. The window DPI itself is not simulated | sandbox (`make check`); labelled SIMULATED, never native |
+| Pixel-density audit | `tools/check_dpi.lua`: every `newCanvas`/`newFont` in `src/` states its density (§2) | local `make check` |
 | Native macOS | owner, or a macOS GitLab runner later | see §13 |
 
 Golden fixtures are regenerated only by an explicit `tools/update_goldens.lua`, and every regeneration is called out in the PR.
@@ -143,7 +151,7 @@ Golden fixtures are regenerated only by an explicit `tools/update_goldens.lua`, 
 ## 11. Tooling and CI
 
 - `make bootstrap` installs the rocks into `.rocks/<platform>/` and downloads the pinned StyLua into `.tools/<platform>/`. The platform key (`<os>-<arch>`, e.g. `darwin-arm64`, `linux-arm64`) comes from `tools/platform.sh`, the single source used by the Makefile, bootstrap and evidence tooling. A macOS host and a Linux container can therefore share one checkout without overwriting each other's native binaries (details in `docs/CI.md`).
-- `make check` runs `fmt-check`, `lint`, `test`, `validate` and `smoke` (smoke only when `love` and `xvfb-run` exist).
+- `make check` runs `fmt-check`, `lint`, `test`, `validate`, `smoke` and `hidpi-sim` (smoke and hidpi-sim need `love`, plus `xvfb-run` on Linux).
 - **Current gate: `make check` run locally.** CI is deferred by owner decision (2026-11-26).
 - **Target CI: the company GitLab with self-hosted runners.** The project will move from GitHub. The Makefile is the CI contract, so the pipeline only runs `make bootstrap && make check && make love` (see `docs/CI.md`).
 
