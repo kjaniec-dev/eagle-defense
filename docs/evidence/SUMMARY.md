@@ -8,7 +8,7 @@ Branch `g1/combat` from `main` `d3ccccf` (PR #2 merged). Plan: `docs/plans/G1_PL
 | Real app in the arena, pixel-perfect smoke, same sim hash as the pure simulation | sandbox (Xvfb, Mesa llvmpipe) | **PASS** |
 | HiDPI harness + mutation proof | SIMULATED HiDPI | **PASS** 8/8, 4/4 detected |
 | BSD grep portability correction | sandbox + bash 3.2 emulation | **PASS** |
-| Visual spike (24 px vs 32 px concepts) | concept art, rendered on the CPU | see "Art direction spike" |
+| Visual spike (24 px vs 32 px concepts) | concept art, CPU-rendered, byte-deterministic | **DELIVERED**; owner choice pending |
 | Native feel, determinism and art choice | native (owner) | **PENDING**: `docs/acceptance/G1-macos.md` |
 
 ## Contract amendments (G1-D1, recorded before any code)
@@ -40,6 +40,12 @@ TECHNICAL_DESIGN §2, §5, §6: 1 tile = 256 u; integer u/tick tuning; `px = flo
 
 ## App
 The boot state enters the arena (the G0 debug sandbox is removed). PLACEHOLDER rendering through the pure `render/layout`; F5 debug tuning editor (in-memory copy, restart on change, `TUNING MODIFIED`, recordings tagged `debug_tuned`); F2 restart; F8 saves the recording. Smoke drives the arena with a scripted 120-tick input; the SMOKE line reports positions and the sim hash, pinned in `tools/lib/smoke_expect.sh` against the pure simulation.
+
+## Art direction spike (G1-D4, G1-D5)
+- `docs/art/mockups/`: `A-native.png` (640×360), `B-native.png` (768×432), `A-1920x1080.png` (3×), `B-1920x1080-integer.png` (2×, letterboxed), `B-1920x1080-fit.png` (2.5× sharp-bilinear), `compare-1920x1080.png`, `palette.gpl` (48 colours) and `README.md` (trade-offs, provenance, recommendation). SHA-256 per file is listed in that README.
+- Pipeline A (hand-authored, code-defined pixel art in `tools/mockup/`, rendered headless on the CPU by `make mockups`; two runs give byte-identical PNGs). Nothing is under `assets/`, `src/`, `config/` or `levels/`; the `.love` contains no `docs/` or `tools/` files (verified). The Blender MCP experiment was not used.
+- Authored by an Opus subagent and reviewed by the main agent on the rendered PNGs. Recommendation in the README: **A (24 px)** — exact integer scaling at 720p/1080p/1440p/4K and Steam Deck, lower asset cost; B's extra detail mostly pays off at 1440p/4K.
+- Honest assessment: brick, steel, water, HUD and lighting meet the concept bar; the tanks are readable but still somewhat generic, and the HQ eagle is busy at 24 px. Commissioning a pixel artist for the hero sprites (ART_DIRECTION §7, Pipeline B) should be considered at G3. Not yet viewed on a real display: owner check in `docs/acceptance/G1-macos.md` §3.
 
 ## Not changed
 No new runtime dependencies. CI stays disabled. No BMAD. No G2 work (terrain types, destruction). The pixel-density invariant and the toolchain layout are unchanged.
