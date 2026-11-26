@@ -47,7 +47,8 @@ function App.load(argv)
   ctx.save_replay = function(rec)
     love.filesystem.createDirectory("replays")
     App.saved = (App.saved or 0) + 1
-    local name = ("replays/arena-%d-%d.lua"):format(rec.checkpoints[#rec.checkpoints][1], App.saved)
+    local last = rec.checkpoints[#rec.checkpoints]
+    local name = ("replays/arena-%d-%d.lua"):format(last and last[1] or 0, App.saved)
     love.filesystem.write(name, require("src.core.serialize").encode(rec))
     return love.filesystem.getSaveDirectory() .. "/" .. name
   end

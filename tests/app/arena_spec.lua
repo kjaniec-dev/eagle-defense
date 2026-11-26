@@ -48,6 +48,13 @@ describe("app.states.arena", function()
     assert.is_true(replay.verify(rec, tuning.load()))
   end)
 
+  it("saves an empty recording at tick 0 without failing", function()
+    local st, ctx = new_state()
+    st:keypressed("f8")
+    assert.are.same({}, ctx.saved[1].checkpoints)
+    assert.are.same({}, ctx.saved[1].frames)
+  end)
+
   it("quits on pause (Esc) like the G0 scene", function()
     local st, ctx = new_state()
     local frame = args.smoke_frame(1)
