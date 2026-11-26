@@ -1,5 +1,6 @@
 # Worktrees
 .worktrees/
+.worktree/
 
 # Local toolchain
 .rocks/

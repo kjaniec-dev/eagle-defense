@@ -51,4 +51,7 @@ make evidence    # review evidence package → evidence/
 
 ## License
 
-Proprietary. All rights reserved. See [LICENSE](LICENSE). Third-party tooling used only for development (busted, luacheck, StyLua, shellcheck) is not distributed with the game.
+- **Source code:** [PolyForm Noncommercial 1.0.0](LICENSE). Use, study, modify and share for any noncommercial purpose. Commercial use requires permission.
+- **Game content** (`assets/`, `levels/`, name and logo): proprietary, all rights reserved.
+
+See [NOTICE.md](NOTICE.md) for details and third-party licenses.

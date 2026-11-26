@@ -166,7 +166,7 @@ Golden fixtures are regenerated only by an explicit `tools/update_goldens.lua`, 
 | Risk | Impact | Mitigation |
 |---|---|---|
 | CI deferred until the move to company GitLab | Regressions slip through if `make check` is skipped | `make check` output is mandatory in every evidence package. Set up the GitLab pipeline before G9 at the latest. |
-| Proprietary code in a **public** GitHub repo | Code is exposed before release | Make the repo private, or remove it after the move to GitLab (owner decision) |
+| Public repo (owner decision) | Clones or rebuilds of the code appear | Code is PolyForm Noncommercial, so commercial use is forbidden. Assets and levels are proprietary, so a rebuild without them is not the game. Monitor for infringements before and after launch. |
 | Reference behavior largely unverified | Feel deviates from the classic | Data-driven constants, calibration pass in G1/G4, values marked UNV |
 | Original art quality from an AI-driven pipeline | The "commercial quality" bar may not be met | Early G3 slice and an owner decision on commissioning an artist (see ART_DIRECTION §7) |
 | LÖVE 11.5 is aging (2023), and 12.0 is unreleased | Future OS/SDL issues, especially on macOS | Pin 11.5, keep API usage conservative, re-evaluate 12.0 at G9 |

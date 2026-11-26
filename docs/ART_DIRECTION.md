@@ -79,7 +79,8 @@ Muzzle flash, projectile trail, brick debris chunks, steel sparks, tank explosio
 2. `tools/check_assets.lua` validates the files: PNG dimensions are multiples of the grid, colors are within the palette, there is no stray alpha, and atlas sizes are within limits.
 3. Each milestone with art includes screenshots at 1× and 3×, viewed by the owner on a real display.
 4. **Steam AI-content disclosure.** Assets produced by an AI agent (including code-generated pixel art) must be disclosed in the Steam content survey. This is tracked as a G9 task.
-5. External packs or fonts are allowed only with licenses that permit commercial use (CC0, OFL, or an explicit commercial license), and must be recorded in provenance.
+5. Game-made assets are proprietary and must not be released under the code license (see `NOTICE.md`).
+6. External packs or fonts are allowed only with licenses that permit commercial use (CC0, OFL, or an explicit commercial license), and must be recorded in provenance.
 
 ## 8. Early visual prototype (G3, but scheduled early)
 

@@ -34,7 +34,7 @@ The next milestone never starts automatically.
 1. **Repository hygiene**
    - `.gitignore`: `.rocks/`, `build/`, `dist/`, `.serena/cache`, `*.love`, OS junk.
    - `.editorconfig`, `stylua.toml`, `.luacheckrc`.
-   - `LICENSE`: proprietary "All rights reserved" (Q-G0-3).
+   - `LICENSE` (PolyForm Noncommercial 1.0.0, code) and `NOTICE.md` (proprietary content, third-party notices) (Q-G0-3).
    - `assets/PROVENANCE.md` and `assets/manifest.lua` (initially empty).
 2. **Bootstrap**
    - `conf.lua`: identity `eagle-defense`, version 11.5, a resizable 1280×720 window, highdpi, vsync, and the unused `physics` module disabled.
@@ -78,6 +78,6 @@ The next milestone never starts automatically.
 | # | Topic | Decision |
 |---|---|---|
 | Q-G0-1 | Runner hosting: where, which labels, and should the macOS runner be the owner's Mac? | **CI deferred** (owner, 2026-11-26). For now we test locally with `make check`. CI will run on the company GitLab with self-hosted runners. |
-| Q-G0-2 | Public repo + self-hosted runner: make it private, or restrict triggers? | No GitHub runner will be used, so the runner risk is gone. The code is still proprietary and public on GitHub: make the repo private or remove it after the move to GitLab (owner). |
-| Q-G0-3 | Source license | Proprietary, all rights reserved |
+| Q-G0-2 | Public repo + self-hosted runner: make it private, or restrict triggers? | No GitHub runner will be used, so the runner risk is gone. The repo **stays public** (owner, 2026-11-26) under the Q-G0-3 license. |
+| Q-G0-3 | Source license | **PolyForm Noncommercial 1.0.0** for source code. Game content (`assets/`, `levels/`, name and logo) is proprietary, all rights reserved. The repo stays **public** (owner, 2026-11-26). See `NOTICE.md`. |
 | Q-G0-4 | Move the static art spike into G1? | Yes |
