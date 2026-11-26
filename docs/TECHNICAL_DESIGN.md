@@ -108,7 +108,7 @@ world canvas 640x360 (nearest)
 
 ## 9. Data formats
 
-**Levels:** `levels/NN.lua` returns a data-only table. It is loaded via `loadstring` in an empty environment, with a size limit and with `string.dump` and bytecode rejected.
+**Levels:** `levels/NN.lua` contains a data-only table literal (`return { ... }`). It is read with `core/serialize.decode`, a **non-executing parser** for a strict Lua-literal subset: tables, strings, finite numbers, booleans and `--` line comments. The data is never compiled or run. There is no `loadstring`/`load`/`dofile`/`require` of level or save data. Input size and nesting depth are limited, and bytecode, block comments, expressions, function calls, duplicate keys and nil values inside tables are all rejected. Being `.lua` files is only for editor syntax highlighting.
 
 ```lua
 return {
@@ -125,7 +125,7 @@ The half-tile character grid is human-readable and diffable. Partial-brick autho
 
 **Config:** `config/*.lua` tables, validated at load.
 
-**Saves:** a Lua-literal serializer (`core/serialize`) handles plain tables and is loaded with the same sandbox. Each save has a version, a schema check and a checksum. Writes go to two alternating slots (A/B) with a sequence number, because LÖVE 11 has no atomic rename. The loader picks the newest valid slot, and if both slots are corrupt it falls back to defaults and backs up the corrupt file.
+**Saves:** written by `core/serialize.encode` and read by the same non-executing `decode`. Encoding is canonical (sorted keys; the array part is the contiguous prefix `1..n`, never `#t`), so equal data always yields identical bytes. Each save has a version, a schema check and a checksum. Writes go to two alternating slots (A/B) with a sequence number, because LÖVE 11 has no atomic rename. The loader picks the newest valid slot, and if both slots are corrupt it falls back to defaults and backs up the corrupt file.
 
 ## 10. Testing
 
@@ -135,7 +135,7 @@ The half-tile character grid is human-readable and diffable. Partial-brick autho
 | Scenario / golden replays | busted: load level + replay → assert state hash at checkpoints | local `make check` (+ CI when enabled) |
 | Level and save validation | `tools/validate_levels.lua`, spec tests | local `make check` (+ CI when enabled) |
 | Architecture boundary | spec that scans `src/sim` and `src/core` | local `make check` (+ CI when enabled) |
-| Headless smoke | `love . --smoke=N` under Xvfb with `SDL_AUDIODRIVER=dummy`: runs N ticks, saves a PNG of the canvas, exits 0 | sandbox (verified feasible: Mesa llvmpipe GL 4.5) + Linux CI when enabled |
+| Headless smoke | `tools/smoke.sh`: `love . --smoke=N --window=WxH` under Xvfb (Linux) or in a real window (macOS). It runs N ticks of scripted input, captures the canvas and the backbuffer, verifies the integer upscale pixel by pixel in **physical** pixels, and reports logical size, physical size and DPI | sandbox (verified feasible: Mesa llvmpipe GL 4.5) + Linux CI when enabled |
 | Native macOS | owner, or a macOS GitLab runner later | see §13 |
 
 Golden fixtures are regenerated only by an explicit `tools/update_goldens.lua`, and every regeneration is called out in the PR.

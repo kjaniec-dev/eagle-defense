@@ -5,9 +5,13 @@
 -- It NEVER compiles or executes the input, so a tampered save file cannot
 -- run code.
 --
--- Supported values: nil (as table values are skipped), booleans, finite
--- numbers, strings, and tables with string or number keys. Cycles,
--- functions, userdata, NaN and infinities are rejected.
+-- Supported values: booleans, finite numbers, strings, and tables with
+-- string or finite-number keys (`nil` only as the whole top-level value).
+-- Cycles, functions, userdata, NaN and infinities are rejected.
+--
+-- Canonical form: equal data always encodes to identical text, regardless
+-- of table insertion history. The array part is the contiguous prefix
+-- 1..n, and all other keys are sorted (numbers before strings).
 --
 -- Grammar accepted by decode:
 --   chunk  := ['return'] value
@@ -15,6 +19,9 @@
 --   table  := '{' [field {sep field} [sep]] '}'     sep := ',' | ';'
 --   field  := '[' value ']' '=' value | name '=' value | value
 -- `--` line comments and whitespace are allowed between tokens.
+-- Rejected on decode: duplicate keys (including a positional index
+-- colliding with an explicit [n]), nil values inside tables, and nesting
+-- deeper than MAX_DEPTH. The encoder enforces the same depth limit.
 
 local M = {}
 
@@ -87,16 +94,26 @@ end
 
 local encode_value
 
-local function encode_table(t, depth, seen, indent)
+-- `level` is the nesting level of `t`: the top-level table is level 1.
+-- Encoder and decoder share the same limit: level > MAX_DEPTH is rejected.
+local function encode_table(t, level, seen)
   if seen[t] then
     error("serialize: cycle detected", 0)
   end
-  if depth > M.MAX_DEPTH then
+  if level > M.MAX_DEPTH then
     error("serialize: table nesting too deep", 0)
   end
   seen[t] = true
 
-  local keys, n = {}, #t
+  -- Canonical array part: the longest prefix 1..n of non-nil values, found by
+  -- direct indexing. `#t` is NOT used, because for tables with holes Lua may
+  -- return any border, which depends on insertion history.
+  local n = 0
+  while t[n + 1] ~= nil do
+    n = n + 1
+  end
+
+  local keys = {}
   for k in pairs(t) do
     local kt = type(k)
     if kt == "number" then
@@ -119,10 +136,10 @@ local function encode_table(t, depth, seen, indent)
     return "{}"
   end
 
-  local pad = ("  "):rep(depth + 1)
+  local pad = ("  "):rep(level)
   local parts = {}
   for i = 1, n do
-    parts[#parts + 1] = pad .. encode_value(t[i], depth + 1, seen, indent)
+    parts[#parts + 1] = pad .. encode_value(t[i], level, seen)
   end
   for _, k in ipairs(keys) do
     local ks
@@ -133,13 +150,14 @@ local function encode_table(t, depth, seen, indent)
     else
       ks = "[" .. encode_number(k) .. "]"
     end
-    parts[#parts + 1] = pad .. ks .. " = " .. encode_value(t[k], depth + 1, seen, indent)
+    parts[#parts + 1] = pad .. ks .. " = " .. encode_value(t[k], level, seen)
   end
   seen[t] = nil
-  return "{\n" .. table.concat(parts, ",\n") .. ",\n" .. ("  "):rep(depth) .. "}"
+  return "{\n" .. table.concat(parts, ",\n") .. ",\n" .. ("  "):rep(level - 1) .. "}"
 end
 
-encode_value = function(v, depth, seen)
+-- `level` is the nesting level of the enclosing table (0 at top level).
+encode_value = function(v, level, seen)
   local tv = type(v)
   if tv == "nil" then
     return "nil"
@@ -150,7 +168,7 @@ encode_value = function(v, depth, seen)
   elseif tv == "string" then
     return escape_string(v)
   elseif tv == "table" then
-    return encode_table(v, depth, seen)
+    return encode_table(v, level + 1, seen)
   end
   error("serialize: unsupported value type " .. tv, 0)
 end
@@ -274,7 +292,7 @@ function Parser:table(depth)
     self:fail("table nesting too deep")
   end
   self.pos = self.pos + 1 -- '{'
-  local t, n = {}, 0
+  local t, n, seen = {}, 0, {}
   while true do
     self:skip()
     if self:peek() == "}" then
@@ -305,8 +323,14 @@ function Parser:table(depth)
         val = self:value(depth)
       end
     end
-    if t[key] ~= nil then
+    -- Keys are tracked separately from values, so `{ a = nil, a = 1 }` is
+    -- still caught as a duplicate.
+    if seen[key] then
       self:fail("duplicate key")
+    end
+    seen[key] = true
+    if val == nil then
+      self:fail("nil values are not allowed inside tables")
     end
     t[key] = val
     self:skip()

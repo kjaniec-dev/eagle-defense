@@ -43,6 +43,40 @@ describe("render.viewport", function()
     assert.is_true(math.abs(vp.h - 768) < 1e-6)
   end)
 
+  describe("HiDPI: logical vs physical pixels (review P2-2)", function()
+    it("scales in physical pixels: logical 1280x720 at DPI 2 is 4x, not 2x", function()
+      local vp = viewport.compute(1280 * 2, 720 * 2, 640, 360, "integer")
+      assert.are.equal(4, vp.scale)
+      local lx, ly, ls = viewport.to_logical(vp, 2)
+      assert.are.same({ 0, 0, 2 }, { lx, ly, ls })
+    end)
+
+    for _, case in ipairs({
+      { dpi = 2, lw = 1512, lh = 982 }, -- 14" MacBook Pro default
+      { dpi = 2, lw = 1440, lh = 900 },
+      { dpi = 1.5, lw = 1280, lh = 720 }, -- Windows 150%
+      { dpi = 1.25, lw = 1536, lh = 864 }, -- Windows 125% on 1920x1080
+    }) do
+      it(
+        ("maps back to integer physical pixels at DPI %.2f (%dx%d logical)"):format(
+          case.dpi,
+          case.lw,
+          case.lh
+        ),
+        function()
+          local pw, ph = math.floor(case.lw * case.dpi), math.floor(case.lh * case.dpi)
+          local vp = viewport.compute(pw, ph, 640, 360, "integer")
+          local lx, ly, ls = viewport.to_logical(vp, case.dpi)
+          local px, py, ps = lx * case.dpi, ly * case.dpi, ls * case.dpi
+          assert.is_true(math.abs(px - math.floor(px + 0.5)) < 1e-9)
+          assert.is_true(math.abs(py - math.floor(py + 0.5)) < 1e-9)
+          assert.is_true(math.abs(ps - math.floor(ps + 0.5)) < 1e-9)
+          assert.is_true(vp.w <= pw and vp.h <= ph)
+        end
+      )
+    end
+  end)
+
   it("maps window pixels to canvas pixels", function()
     local vp = viewport.compute(1280, 800, 640, 360, "integer")
     assert.are.same({ 0, 0 }, { viewport.to_canvas(vp, 0, 40) })

@@ -93,11 +93,110 @@ describe("core.serialize", function()
     end
   end)
 
-  it("rejects nesting beyond MAX_DEPTH", function()
-    local deep = ("{"):rep(serialize.MAX_DEPTH + 2) .. ("}"):rep(serialize.MAX_DEPTH + 2)
-    local v, err = serialize.decode(deep)
-    assert.is_nil(v)
-    assert.matches("too deep", err)
+  describe("canonical output (review P2-3)", function()
+    it("encodes sparse tables independently of insertion history", function()
+      local a = { 1, 2, nil, 4 }
+      local b = {}
+      b[4] = 4
+      b[2] = 2
+      b[1] = 1
+      local c = {}
+      for i = 1, 4 do
+        c[i] = i
+      end
+      c[3] = nil -- #c may now report 4 or 2; output must not depend on it
+      local ea, eb, ec = serialize.encode(a), serialize.encode(b), serialize.encode(c)
+      assert.are.equal(ea, eb)
+      assert.are.equal(ea, ec)
+      assert.matches("%[4%] = 4", ea)
+      assert.are.same({ 1, 2, [4] = 4 }, serialize.decode(ea))
+    end)
+
+    it("encodes a table whose array part starts after a hole with explicit keys", function()
+      local t = { [2] = "b", [3] = "c" }
+      local out = serialize.encode(t)
+      assert.matches('%[2%] = "b"', out)
+      assert.are.same(t, serialize.decode(out))
+    end)
+
+    it("is identical across independent LuaJIT processes", function()
+      local script = os.tmpname()
+      local f = assert(io.open(script, "w"))
+      f:write([[
+        package.path = "./?.lua;" .. package.path
+        local s = require("src.core.serialize")
+        local t = {}
+        if arg[1] == "reverse" then
+          for i = 50, 1, -1 do t["k" .. i] = i end
+          t[7] = "x"; t[1] = "a"; t[2] = "b"
+        else
+          t[1] = "a"; t[2] = "b"; t[7] = "x"
+          for i = 1, 50 do t["k" .. i] = i end
+        end
+        io.write(s.encode(t))
+      ]])
+      f:close()
+      local function run(mode)
+        local p = assert(io.popen("luajit " .. script .. " " .. mode))
+        local out = p:read("*a")
+        p:close()
+        return out
+      end
+      local forward, reverse = run("forward"), run("reverse")
+      os.remove(script)
+      assert.is_true(#forward > 0)
+      assert.are.equal(forward, reverse)
+    end)
+  end)
+
+  describe("strict decoding (review P2-3)", function()
+    local cases = {
+      ["nil keyed value"] = "return { a = nil }",
+      ["nil positional value"] = "return { 1, nil, 3 }",
+      ["duplicate key hidden by nil"] = "return { a = nil, a = 1 }",
+      ["positional then explicit [1]"] = 'return { "x", [1] = "y" }',
+      ["explicit [1] then positional"] = 'return { [1] = "y", "x" }',
+      ["same numeric key as int and float"] = "return { [1] = 1, [1.0] = 2 }",
+    }
+    for name, text in pairs(cases) do
+      it("rejects " .. name, function()
+        local v, err = serialize.decode(text)
+        assert.is_nil(v)
+        assert.is_string(err)
+      end)
+    end
+  end)
+
+  describe("nesting limit is identical for encode and decode (review P2-3)", function()
+    local function nested(levels)
+      local root = {}
+      local cur = root
+      for _ = 2, levels do
+        local child = {}
+        cur.c = child
+        cur = child
+      end
+      return root
+    end
+
+    it("accepts exactly MAX_DEPTH levels in both directions", function()
+      local text = serialize.encode(nested(serialize.MAX_DEPTH))
+      local v, err = serialize.decode(text)
+      assert.is_nil(err)
+      assert.is_table(v)
+    end)
+
+    it("rejects MAX_DEPTH + 1 levels in both directions", function()
+      assert.has_error(function()
+        serialize.encode(nested(serialize.MAX_DEPTH + 1))
+      end)
+      local deep = ("{"):rep(serialize.MAX_DEPTH + 1) .. ("}"):rep(serialize.MAX_DEPTH + 1)
+      local v, err = serialize.decode(deep)
+      assert.is_nil(v)
+      assert.matches("too deep", err)
+      local ok = ("{"):rep(serialize.MAX_DEPTH) .. ("}"):rep(serialize.MAX_DEPTH)
+      assert.is_table(serialize.decode(ok))
+    end)
   end)
 
   it("enforces the size limit", function()

@@ -47,6 +47,16 @@ function M.compute(win_w, win_h, canvas_w, canvas_h, mode)
   return { scale = scale, prescale = prescale, x = x, y = y, w = w, h = h }
 end
 
+-- Converts a viewport computed in physical pixels into the logical units
+-- LÖVE draws in (physical / dpi_scale). Returns x, y and scale for
+-- love.graphics.draw. Multiplied back by dpi_scale, they land on exact
+-- integer physical pixels, which keeps integer scaling pixel-perfect on
+-- HiDPI (Retina, 2.0) and fractional-DPI (e.g. Windows 150%) displays.
+function M.to_logical(vp, dpi_scale)
+  assert(dpi_scale and dpi_scale > 0, "dpi_scale must be positive")
+  return vp.x / dpi_scale, vp.y / dpi_scale, vp.scale / dpi_scale
+end
+
 -- Maps a window pixel position to canvas coordinates. Returns nil when the
 -- position lies outside the canvas.
 function M.to_canvas(vp, px, py, canvas_w, canvas_h)

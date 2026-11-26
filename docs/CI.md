@@ -35,8 +35,21 @@ apt-get install -y love luajit luarocks liblua5.1-0-dev build-essential xvfb zip
 
 `make bootstrap` downloads pinned tools from luarocks.org and from GitHub releases (StyLua). If the company network blocks those hosts, mirror the artifacts internally and keep the SHA-256 pins.
 
-A native macOS smoke test can run on a macOS runner in a logged-in GUI session with
-`make smoke LOVE=/Applications/love.app/Contents/MacOS/love`. This does not replace the owner's manual checklist (`docs/acceptance/`).
+## Running the gate on macOS (prerequisites)
+
+- [LÖVE 11.5](https://github.com/love2d/love/releases/tag/11.5) in `/Applications/love.app`. `tools/smoke.sh` finds it automatically if `love` is not on `PATH`.
+- `brew install luajit luarocks shellcheck`, then `make bootstrap` (not yet verified natively).
+- `zip`, `unzip`, `perl`, `od` and `shasum` ship with macOS. GNU `timeout` is **not** required: `tools/smoke.sh` falls back to `gtimeout`, then to `perl`.
+- Smoke opens real windows, so run it from a logged-in GUI session. Do not use SSH without a display or a LaunchDaemon.
+- Default macOS smoke sizes are the logical sizes `800x600 1024x640 1280x720`. These must fit on the display, otherwise the run fails with "window logical size not applied". Override them with `SMOKE_SIZES="..."`.
+- On Retina, physical = logical × 2. The pixel-perfect check runs on physical pixels, so for example logical 1280×720 is verified as 2560×1440 at 4×.
+
+Native macOS smoke results are automated native evidence. They do not replace the owner's manual checklist (`docs/acceptance/`).
+
+## Evidence packages
+
+- `make evidence` produces **final** review evidence. It fails closed: a clean tree is required (no untracked files, and no ignored files in source paths), every check must pass, the `.love` is built from the exact commit (`git archive`), mandatory files must be present, and checksums are verified before and after archiving.
+- `make evidence-dev` produces a development snapshot from a dirty tree. It is named `*-DEV` and marked "NOT REVIEW EVIDENCE".
 
 ## Later (owner note, 2026-11-26)
 

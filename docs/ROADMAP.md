@@ -44,7 +44,7 @@ The next milestone never starts automatically.
    - `core/rng`: xorshift32 with seed, serialize and restore.
    - `core/events`: an event queue.
    - `core/statemachine`: explicit `enter`/`exit`/`update`/`draw` and transition validation.
-   - `core/serialize`: Lua-literal writer plus a sandboxed loader.
+   - `core/serialize`: canonical Lua-literal writer plus a non-executing parser.
 4. **Rendering foundation**
    - `render/viewport`: a 640×360 canvas with integer scale and letterbox computation (pure function, unit-tested), plus window resize and fullscreen toggle (Alt+Enter / F11).
    - `render/debug_overlay` (F3).

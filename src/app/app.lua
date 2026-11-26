@@ -131,22 +131,35 @@ local function smoke_report(window_image)
     write_file(App.opts.smoke_window_out, window_image:encode("png"):getString())
   end
 
+  -- Logical (window points) vs physical (framebuffer pixels). On HiDPI
+  -- displays they differ by the DPI scale. Integer scaling is defined and
+  -- verified in physical pixels only.
+  local lw, lh = love.graphics.getDimensions()
+  local pw, ph = love.graphics.getPixelDimensions()
+  local dpi = love.graphics.getDPIScale()
+  local dims_ok = ww == pw and wh == ph
   local m = App.machine.current.markers or {}
   local function pos(i)
     return m[i] and ("%d,%d"):format(m[i].x, m[i].y) or "-"
   end
   local renderer = { love.graphics.getRendererInfo() }
-  local pixel_ok = res.mismatches == 0 and res.letterbox_bad == 0
+  local passed = dims_ok and res.mismatches == 0 and res.letterbox_bad == 0 and res.checked > 0
   print(
     (
-      "SMOKE %s ticks=%d state=%s p1=%s p2=%s window=%dx%d scale=%d offset=%d,%d "
-      .. "pixels_checked=%d mismatches=%d letterbox_bad=%d out=%s renderer=%s"
+      "SMOKE %s ticks=%d state=%s p1=%s p2=%s logical=%dx%d physical=%dx%d dpi=%.2f "
+      .. "screenshot=%dx%d scale=%d offset=%d,%d pixels_checked=%d mismatches=%d "
+      .. "letterbox_bad=%d out=%s renderer=%s os=%s"
     ):format(
-      pixel_ok and "OK" or "FAIL",
+      passed and "OK" or "FAIL",
       App.loop.tick,
       App.machine.current_name,
       pos(1),
       pos(2),
+      lw,
+      lh,
+      pw,
+      ph,
+      dpi,
       ww,
       wh,
       vp.scale,
@@ -156,10 +169,11 @@ local function smoke_report(window_image)
       res.mismatches,
       res.letterbox_bad,
       out,
-      table.concat(renderer, " / ")
+      table.concat(renderer, " / "),
+      love.system.getOS()
     )
   )
-  App.exit_code = pixel_ok and 0 or 1
+  App.exit_code = passed and 0 or 1
 end
 
 function App.draw()
@@ -200,21 +214,33 @@ local function toggle_fullscreen()
   love.window.setFullscreen(not love.window.getFullscreen(), "desktop")
 end
 
-function App.keypressed(key)
-  App.devices:keypressed(key)
+function App.keypressed(key, scancode, isrepeat)
+  App.devices:keypressed(key, scancode, isrepeat)
   if key == "f3" then
     App.overlay_on = not App.overlay_on
   elseif key == "f4" then
     App.screen:cycle_mode()
-  elseif key == "f11" then
+  elseif key == "f11" and not isrepeat then
     toggle_fullscreen()
-  elseif key == "return" and (love.keyboard.isDown("lalt") or love.keyboard.isDown("ralt")) then
+  elseif
+    key == "return"
+    and not isrepeat
+    and (love.keyboard.isDown("lalt") or love.keyboard.isDown("ralt"))
+  then
     toggle_fullscreen()
   end
 end
 
+function App.keyreleased(key)
+  App.devices:keyreleased(key)
+end
+
 function App.gamepadpressed(js, button)
   App.devices:gamepadpressed(js, button)
+end
+
+function App.gamepadreleased(js, button)
+  App.devices:gamepadreleased(js, button)
 end
 
 function App.joystickadded(js)

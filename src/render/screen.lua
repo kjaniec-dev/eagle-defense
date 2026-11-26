@@ -54,7 +54,8 @@ function Screen:present()
   love.graphics.clear(0, 0, 0, 1)
   love.graphics.setColor(1, 1, 1, 1)
   if self.mode == "integer" then
-    love.graphics.draw(self.canvas, vp.x / dpi, vp.y / dpi, 0, vp.scale / dpi)
+    local lx, ly, ls = viewport.to_logical(vp, dpi)
+    love.graphics.draw(self.canvas, lx, ly, 0, ls)
   else
     local k = vp.prescale
     local pre = ensure_prescaled(self, k)

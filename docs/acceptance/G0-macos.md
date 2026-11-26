@@ -41,6 +41,10 @@ git fetch origin && git checkout g0/foundation
 | 13 | Quit | Esc closes the app cleanly | | |
 | 14 | Stability | Left idle for 10 min with F3 on: no crash, and FPS stays stable | | |
 
+## Optional: automated native smoke
+
+`make smoke` (prerequisites in `docs/CI.md`) runs the pixel-perfect check in physical pixels on the real display. Paste the `SMOKE OK` lines here. Check that they show `dpi=2.00` and a physical size of twice the logical size on Retina.
+
 ## Result
 
 - [ ] All checks passed

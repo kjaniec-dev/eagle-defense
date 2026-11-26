@@ -16,7 +16,8 @@ export LUA_CPATH := $(ROCKS)/lib/lua/5.1/?.so;;
 
 LUA_SOURCES := main.lua conf.lua src config tests tools assets/manifest.lua
 
-.PHONY: help bootstrap fmt fmt-check lint test validate smoke love run check evidence clean
+.PHONY: help bootstrap fmt fmt-check lint test validate smoke love love-dev run check evidence \
+	evidence-dev busted-version clean
 
 help:
 	@echo "bootstrap  install pinned toolchain (.rocks/, .tools/)"
@@ -26,9 +27,11 @@ help:
 	@echo "test       busted unit/scenario tests (LuaJIT)"
 	@echo "validate   architecture boundaries + asset manifest"
 	@echo "smoke      headless LÖVE run (Xvfb) with PNG capture"
-	@echo "love       build dist/eagle-defense.love (+ SHA-256)"
+	@echo "love       build dist/eagle-defense.love from the committed HEAD (+ .sha256, .commit)"
+	@echo "love-dev   build dist/eagle-defense.love from the working tree (marked -dirty)"
 	@echo "check      fmt-check lint test validate smoke"
-	@echo "evidence   build the review evidence package"
+	@echo "evidence   FINAL review evidence package (requires a clean tree; fails closed)"
+	@echo "evidence-dev  development snapshot package (dirty tree allowed, marked DEV)"
 
 bootstrap:
 	./tools/bootstrap.sh
@@ -55,7 +58,10 @@ smoke:
 	./tools/smoke.sh $(SMOKE_TICKS) $(BUILD)/smoke.png
 
 love:
-	./tools/build_love.sh
+	./tools/build_love.sh --commit
+
+love-dev:
+	./tools/build_love.sh --worktree
 
 run:
 	$(LOVE) .
@@ -64,6 +70,12 @@ check: fmt-check lint test validate smoke
 
 evidence:
 	./tools/evidence.sh
+
+evidence-dev:
+	./tools/evidence.sh --dev
+
+busted-version:
+	@$(BUSTED) --lua=$(LUAJIT) --version
 
 clean:
 	rm -rf $(BUILD) dist evidence
