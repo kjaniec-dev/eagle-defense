@@ -70,7 +70,7 @@ fmt-check: require-toolchain
 
 lint: require-toolchain
 	$(LUACHECK) $(LUA_SOURCES)
-	@if command -v shellcheck >/dev/null 2>&1; then shellcheck tools/*.sh && echo "shellcheck: OK"; \
+	@if command -v shellcheck >/dev/null 2>&1; then shellcheck tools/*.sh tools/lib/*.sh && echo "shellcheck: OK"; \
 	else echo "shellcheck: not installed (skipped)"; fi
 
 test: require-toolchain

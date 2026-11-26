@@ -25,6 +25,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=tools/lib/portable.sh
+. "$ROOT/tools/lib/portable.sh"
 OS="$(uname -s)"
 MUTATIONS=0
 if [[ "${1:-}" == "--mutations" ]]; then
@@ -61,10 +63,6 @@ run_with_timeout() {
   fi
 }
 
-png_dims() {
-  od -An -tu1 -j16 -N8 "$1" | awk '{print ($1*16777216+$2*65536+$3*256+$4) "x" ($5*16777216+$6*65536+$7*256+$8)}'
-}
-
 # Maps in-app problem codes to the regression they reveal.
 labels_for_problems() {
   local problems="$1"
@@ -85,7 +83,7 @@ run_case() {
   local ref="$dir/$mode-dpi1"
   local run=("$LOVE" "$ROOT/tools/hidpi_sim" "--smoke=$TICKS" "--window=$size" "--scale-mode=$mode"
     "--smoke-out=$canvas" "--smoke-window-out=$window")
-  local code labels=() line problems expected_probe
+  local code labels=() line problems expected_probe dims
   rm -f "$log" "$canvas" "$window"
   set +e
   if [[ "$OS" == "Linux" && -z "${SMOKE_NO_XVFB:-}" ]]; then
@@ -97,7 +95,8 @@ run_case() {
   code=$?
   set -e
 
-  expected_probe="$(printf 'default_dpi=%.2f probe_canvas_dpi=%.2f probe_font_dpi=%.2f' "$scale" "$scale" "$scale")"
+  # C locale: the app prints '.', and a decimal-comma locale would break %.2f.
+  expected_probe="$(printf_c 'default_dpi=%.2f probe_canvas_dpi=%.2f probe_font_dpi=%.2f' "$scale" "$scale" "$scale")"
   grep -q "^HIDPI_SIM SIMULATED $expected_probe " "$log" || labels+=("simulation-not-applied")
   line="$(grep -E '^SMOKE (OK|FAIL) ' "$log" | head -1 || true)"
   if [[ -z "$line" ]]; then
@@ -110,8 +109,13 @@ run_case() {
     [[ "$line" == *"ticks=$TICKS "*"p1=5600,4992 p2=4256,3552 "* ]] || labels+=("tick-or-markers")
   fi
   [[ $code -eq 0 ]] || [[ ${#labels[@]} -gt 0 ]] || labels+=("exit-$code")
-  if [[ -s "$canvas" && "$(png_dims "$canvas")" != "640x360" ]]; then
-    [[ " ${labels[*]:-} " == *" game-canvas-dpi "* ]] || labels+=("game-canvas-dpi")
+  if [[ -s "$canvas" ]]; then
+    dims="$(png_dims "$canvas")" || dims="unreadable"
+    if [[ "$dims" == "unreadable" ]]; then
+      labels+=("canvas-png-unreadable")
+    elif [[ "$dims" != "640x360" ]]; then
+      [[ " ${labels[*]:-} " == *" game-canvas-dpi "* ]] || labels+=("game-canvas-dpi")
+    fi
   fi
   if [[ "$scale" != "1" ]]; then
     if ! cmp -s "$canvas" "$ref.png" || ! cmp -s "$window" "$ref-window.png"; then

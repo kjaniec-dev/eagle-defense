@@ -8,7 +8,11 @@ Standalone tooling PR between G0 (merged as `550a9f1`) and G1. It contains no ga
 | Original native Retina smoke | native (owner) | **FAIL**: canvas created at display DPI (1280×720 texels), root-caused |
 | Linux sandbox reproduction of that failure | sandbox, simulated DPI defaults | **PASS**: byte-identical to the native PNGs |
 | Fix, strengthened smoke and HiDPI harness: Linux `make check` | sandbox + SIMULATED HiDPI | **PASS** |
-| Corrected native Retina smoke | native | **PENDING**: `docs/acceptance/PR2-macos-retina.md` |
+| Corrected native Retina rendering at 800x600 | native (owner) | **PASS**: in-app SMOKE OK, all values exact; canvas and window PNGs byte-identical to the sandbox renders |
+| Native shell smoke wrapper | native (owner) | **FAIL**: BSD `od` extra empty line parsed as `0x0`; fixed here, native re-run pending |
+| Native 1024x640 / 1280x720 / HiDPI harness | native | **NOT RUN** (wrapper aborted after 800x600) |
+| Full native `make check` | native (owner) | **FAIL** (wrapper only); fmt-check, lint, shellcheck, 186 tests, validate PASS |
+| Portability fix: Linux `make check` + emulated macOS userland | sandbox | **PASS** |
 
 ## Problem
 G0 installed native tools into one flat location (`.rocks/bin`, `.rocks/lib`, `.tools/stylua`). The macOS host and the Docker sandbox mount the same checkout, so whichever ran `make bootstrap` last overwrote the other's binaries. For example, the sandbox left Linux arm64 ELF files (`stylua`, `lfs.so`, `system/core.so`, `term/core.so`) where macOS expected Mach-O.
@@ -51,12 +55,19 @@ G0 installed native tools into one flat location (`.rocks/bin`, `.rocks/lib`, `.
 - `tools/check_dpi.lua` (validate) statically requires an explicit density on every canvas and font in `src/`.
 - `tools/hidpi_sim.sh` (check, evidence) is SIMULATED HiDPI: implicit DPI defaults forced to 1/1.25/1.5/2, integer + fit, byte-compared with the DPI-1 reference. `--mutations` proves that removing each explicit setting (game canvas, prescale canvas, font), or switching the fit filter to nearest, is detected by its own check.
 - The original native PNGs and log are kept outside Git in `native-evidence/` (survives `make clean`). Their hashes are in `docs/evidence/PR2-native-macos.md`, and `make evidence` verifies and packages them as `native/`.
-- Tests: 186 (156 + 30 new).
+- Tests: 186 (156 + 30 new); 196 after the portability fix (+10).
+
+## Shell wrapper portability fix (after the native 800x600 re-run)
+- Native: the corrected Retina rendering passed at 800x600. Then `tools/smoke.sh` failed with `unexpected canvas size 640x360\n0x0`. Cause, confirmed from the native log bytes and from Apple's `od` source: with `-An`, BSD `od` prints an extra empty line, and the per-line awk parser turned it into a second `0x0` result. `tools/hidpi_sim.sh` had the same parser, which would have produced a false `game-canvas-dpi` label. The harness also formatted its expected probe with a locale-dependent `printf %.2f`, which breaks under decimal-comma locales such as `pl_PL`.
+- Fix: `tools/lib/portable.sh` is a shared reader that checks the PNG signature and IHDR, requires exactly 24 bytes including eight dimension bytes, ignores layout and whitespace, and rejects malformed input. It also adds a C-locale `printf_c`. The strict 640x360 assertion is unchanged.
+- Tests: `tests/tools/portable_sh_spec.lua` (+10) uses byte-exact GNU and Apple `od` fixtures. The spec was mutation-checked; both scripts were validated end-to-end under bash 3.2.57 with Apple `od` and `pl_PL` (emulated userland, sandbox evidence). Details: `docs/evidence/PR2-native-macos.md` §4.
+- New native artifacts (outside Git): `native-evidence/pr2-retina-fixed-800x600-2026-11-26/`, with hashes in the same §4.
 
 ## Evidence class (sandbox: Linux arm64, Xvfb, Mesa llvmpipe — NOT native)
 - `make bootstrap` and `make check` ran in the sandbox (linux-arm64). `hidpi-sim/` results are SIMULATED HiDPI evidence.
 - Native, owner-reported: `make bootstrap` / `make check` toolchain steps on macOS (darwin-arm64) PASS, with both platform trees coexisting. The original native Retina smoke FAILED (fixed here).
-- **Pending native:** the corrected Retina smoke at 800x600, 1024x640 and 1280x720 (`docs/acceptance/PR2-macos-retina.md`).
+- Native, owner-reported (corrected version, `2009213`): Retina rendering at 800x600 PASS; wrapper FAIL (fixed here); full `make check` FAIL because of the wrapper only.
+- **Pending native:** a full re-run on the new head covering 800x600, 1024x640, 1280x720, the HiDPI harness and `make check` (`docs/acceptance/PR2-macos-retina.md`).
 
 ## Not changed
 No gameplay or simulation changes. CI stays disabled. No new runtime or tooling dependencies (the harness uses LÖVE, bash, perl, `cmp` and `od`, all already used by the existing tooling). No BMAD.

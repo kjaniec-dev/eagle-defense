@@ -9,7 +9,13 @@ The results below are recorded separately on purpose. The toolchain isolation re
 | Original native Retina smoke (before the fix) | native (owner) | **FAIL**, root cause in §2 |
 | Linux sandbox reproduction of the native failure | sandbox, simulated DPI defaults | **PASS**: byte-identical reproduction (§2) |
 | Fix + strengthened checks + HiDPI harness, Linux `make check` | sandbox / SIMULATED HiDPI | **PASS** (§3) |
-| Corrected native Retina smoke | native | **PENDING**: not run yet (`docs/acceptance/PR2-macos-retina.md`) |
+| Corrected native Retina rendering at 800x600 (in-app smoke) | native (owner) | **PASS** (§4) |
+| Native shell smoke wrapper (`tools/smoke.sh`) | native (owner) | **FAIL**: BSD `od` portability defect after SMOKE OK; fixed in §4, native re-run pending |
+| Native smoke 1024x640 | native | **NOT RUN** (wrapper aborted after 800x600) |
+| Native smoke 1280x720 | native | **NOT RUN** |
+| Native HiDPI harness (SIMULATED defaults on a real HiDPI window) | native host | **NOT RUN** |
+| Full native `make check` | native (owner) | **FAIL**, only because of the wrapper; fmt-check, lint, shellcheck, 186 tests and validate PASS |
+| Portability fix: Linux `make check` + macOS-userland emulation | sandbox | **PASS** (§4) |
 
 ## 1. Native toolchain isolation — PASS (native evidence, reported by the owner)
 | Check | Result |
@@ -134,3 +140,91 @@ DPI 1 passes in every mutation, as expected: Xvfb's real default is 1. This is e
 
 ### Native re-acceptance
 Commands, expected values per logical size (800x600, 1024x640, 1280x720) and the checklist are in `docs/acceptance/PR2-macos-retina.md`. **Native PASS must not be reported until the owner runs it.**
+
+## 4. Native re-run of the corrected version (2026-11-26) and the shell wrapper portability fix
+
+### Native result — rendering PASS at 800x600, wrapper FAIL (native evidence, owner's run)
+The owner ran `make check 2>&1 | tee build/native-check.log` on the Apple M3 Pro. The log does not record the commit; its 186 tests and its `check_dpi` step match `2009213`. fmt-check, luacheck (0/0 in 50 files), shellcheck, busted (186 / 0 / 0 / 0), boundaries, assets and DPI validation all passed. The first smoke size then reported:
+
+```text
+SMOKE OK ticks=120 state=sandbox p1=5600,4992 p2=4256,3552 logical=800x600 physical=1600x1200 dpi=2.00 screenshot=1600x1200 mode=integer canvas=640x360 canvas_dpi=1.00 scale=2 offset=160,240 pixels_checked=921600 expected_checked=921600 mismatches=0 letterbox_checked=998400 expected_letterbox=998400 letterbox_bad=0 problems=none renderer=OpenGL / 4.1 Metal - 91.7 / Apple / Apple M3 Pro os=OS X
+smoke[800x600]: unexpected canvas size 640x360
+0x0
+make: *** [smoke] Error 1
+```
+
+Every value matches the 800x600 row of `docs/acceptance/PR2-macos-retina.md`. The wrapper aborted before 1024x640, 1280x720 and `hidpi-sim`, so those were **not run**.
+
+The artifacts were copied unchanged from the owner's `build/` to `native-evidence/pr2-retina-fixed-800x600-2026-11-26/` before any sandbox command touched `build/`. That directory is outside Git and survives `make clean`.
+
+| File | Size | SHA-256 |
+|---|---|---|
+| `smoke.png` (canvas readback) | 640x360, 4-bit palette | `0bb5bb198021179823c555e5754fb2a64cf53b32d0e597daef17d73fcce47cde` |
+| `smoke-window.png` (backbuffer) | 1600x1200, 4-bit palette | `d7a904a9028d9dc1d289d72f44b3a48180dbba66bdeba95956010e9d8c40cf16` |
+| `smoke.log` | | `eba55d84e44fe6b94a8f74d67d6c236438708a7dcc5679e4a577fa538e4a1c17` |
+| `native-check.log` | | `11ed12ac073b1b7bb859e4bec1c7ca251a71410bddf8154bd5d36d4f3bcd8180` |
+
+Independent pixel cross-check (a comparison in the sandbox, not native evidence): the native canvas PNG is **byte-identical** to the Linux sandbox 640x360 canvas. The native 1600x1200 window PNG is **byte-identical** to a Linux sandbox run at 1600x1200 (DPI 1, scale 2, offset 160,240). The 7520 differing text texels of §2 are gone.
+
+### Root cause of the wrapper failure (confirmed from the actual output)
+- The native log holds `640x360`, a newline, then `0x0`. The per-line parser in `tools/smoke.sh` (and the copy in `tools/hidpi_sim.sh`) printed one result per input line of `od -An -tu1 -j16 -N8`. So `od` produced one complete line and one line with no fields. GNU `od` prints exactly one line, which is why Linux passed.
+- Apple's `od` is `hexdump` invoked as `od` (`apple-oss-distributions/shell_cmds`, `hexdump/`). Its `parse.c` forces an extra blank line for `-A n` (comment: "Force -A n to dump extra blank line like default od behavior"), and pads the last data line with spaces.
+- Reproduced in the sandbox with that `od` built from source (tag `shell_cmds-329`, `-D__APPLE__`) on the native canvas PNG. Its output is the data line plus trailing spaces, `\n`, then an empty `\n`. The old parser on it prints exactly `640x360\n0x0\n`. Running the pre-fix `tools/smoke.sh` with that `od` (and bash 3.2) reproduces the native message verbatim; with GNU `od` it passes.
+- This is a test-harness defect, not a rendering defect. No rendering code changed.
+
+### Further macOS issues found in the harness review (`tools/hidpi_sim.sh`)
+Checked under bash 3.2.57 built from Apple's source (`apple-oss-distributions/bash`, tag `bash-144`; macOS ships 3.2.57):
+1. **Same `od` defect, worse symptom.** The pre-fix harness with Apple `od` marked every case FAIL with the false label `game-canvas-dpi`, a wrong rendering diagnosis (reproduced: 4/4 cases with `HIDPI_SIM_SCALES="1 2"`).
+2. **Locale-dependent `printf %.2f`.** The expected probe string was formatted by bash's `printf`, which parses and prints floats per `LC_NUMERIC`. Under a decimal-comma locale such as `pl_PL.UTF-8`, `printf %.2f 1.25` fails with "invalid number" and prints `0,00`, while LÖVE prints `1.25`. Reproduced with bash 3.2 and glibc `pl_PL.UTF-8`: every case failed with `simulation-not-applied`. On a Mac this happens when Terminal sets `LANG` to a decimal-comma locale.
+   - The obvious fix `LC_ALL=C printf …` works in bash 5 but **not** in bash 3.2, which ignores temporary assignments for builtins. Only an assignment inside a subshell works in both (verified).
+3. No other bash 3.2 problem was found:
+   - Empty arrays are only expanded as `${#a[@]}` or `${a[*]:-}`; plain `"${a[@]}"` on an empty array fails under `set -u` in 3.2.
+   - Also fine in 3.2: `+=` on arrays, process substitution, here-strings, `local a=()`, `[[ … == *glob* ]]`, `${var%% *}`, and BSD `mktemp -d`, `cp -R`, `sed -n 's/…/p'` and `perl`.
+
+### Fix
+- `tools/lib/portable.sh` (new, sourced by both scripts):
+  - `png_dims FILE` reads the first 24 bytes with `od -An -tu1 -N24`.
+  - `png_dims_from_od` parses them independently of line layout. Whitespace and blank lines are ignored.
+  - The input is rejected unless it has exactly 24 decimal tokens in 0..255: the PNG signature, an IHDR chunk of length 13, and exactly eight dimension bytes with width and height in 1..2^31−1.
+  - Missing, empty, truncated, non-PNG and non-regular inputs fail with no output.
+  - `printf_c` is `printf` in the C locale, using the subshell form.
+- `tools/smoke.sh` keeps the strict check `[[ "$dims" == "640x360" ]]`. An unreadable header reports `'unreadable'`.
+- `tools/hidpi_sim.sh` uses `png_dims` (an unreadable canvas PNG gets its own label `canvas-png-unreadable`, never `game-canvas-dpi`) and `printf_c` for the probe string.
+- `make lint` now also runs shellcheck on `tools/lib/*.sh`. Tolerances, acceptance criteria and rendering code are unchanged.
+
+### Tests
+- `tests/tools/portable_sh_spec.lua`: +10 tests, 196 in total.
+- It runs the real helpers under the system `bash` and `od`, which on a Mac means `/bin/bash` 3.2 and BSD `od`.
+- Fixtures in `tests/fixtures/od/` are byte-exact GNU and Apple `od` captures of the native canvas header; provenance is in their README.
+- The regression test proves the Apple fixture makes the old parser print exactly the native `640x360\n0x0\n`, while the new reader prints one line.
+- Further tests cover:
+  - harmless whitespace and blank-line variants;
+  - 17 malformed inputs: empty, blank-only, the bare 8-byte dump, 23 or 25 bytes, a value of 256, negative and hex tokens, an address column, CRLF, a wrong signature, a wrong IHDR type or length, zero width or height, and the high bit set;
+  - real files read with the system `od`;
+  - `printf_c` under `pl_PL`;
+  - static pins on both callers.
+
+Mutation check of the spec (failing tests):
+
+| Mutation of `tools/lib/portable.sh` | GNU od, bash 5, C locale | Apple od, bash 3.2, pl_PL |
+|---|---|---|
+| none | 0 | 0 |
+| per-line parser restored | 7 | 7 |
+| byte count not checked | 1 | 1 |
+| 0..255 range not checked | 1 | 1 |
+| PNG signature/IHDR not checked | 2 | 2 |
+| no C-locale override | 0 | 1 |
+| `LC_ALL=C printf` (temporary assignment) | 0 | 1 |
+
+The locale mutations fail only where `pl_PL` is installed, which includes macOS. Minimal Linux containers fall back to C and cannot detect them.
+
+### Validation in the sandbox (sandbox evidence; macOS userland emulated, not native)
+With bash 3.2.57, Apple `od` (built as above) and `LANG=pl_PL.UTF-8`, under Xvfb:
+- fixed `tools/smoke.sh` at the macOS default sizes `800x600 1024x640 1280x720`: 3 × SMOKE OK, `smoke: OK`;
+- fixed `tools/hidpi_sim.sh`: 8/8 `CASE … PASS`;
+- `--mutations`: all four DETECTED by their own labels.
+
+With a fake `love` that writes chosen canvas headers, the wrapper accepts 640x360 and rejects 1280x720 (the original Retina shape), a truncated header and a non-PNG file. The full Linux `make check` result is in `docs/evidence/SUMMARY.md`.
+
+What this does **not** prove: Apple's shipped `od` binary and macOS libc were emulated, not run. The native re-run in `docs/acceptance/PR2-macos-retina.md` remains required for 1024x640, 1280x720, the harness and the full `make check`.
+

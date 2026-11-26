@@ -15,11 +15,13 @@
 # macOS opens a real window and needs a logged-in GUI session. Its
 # results are native automated evidence, which still does not replace the
 # owner's manual acceptance.
-# Requires bash, od, grep, and one of: timeout, gtimeout or perl (macOS
-# ships perl).
+# Requires bash (3.2+, macOS /bin/bash works), od, awk, grep, and one of:
+# timeout, gtimeout or perl (macOS ships perl).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=tools/lib/portable.sh
+. "$ROOT/tools/lib/portable.sh"
 OS="$(uname -s)"
 TICKS="${1:-120}"
 OUT="${2:-$ROOT/build/smoke.png}"
@@ -96,10 +98,11 @@ smoke_one() {
     grep -q 'p1=5600,4992 p2=4256,3552' "$log" || { echo "smoke[$size]: marker positions differ" >&2; exit 1; }
   fi
 
-  # The canvas PNG IHDR must be 640x360.
+  # The canvas PNG IHDR must be 640x360. png_dims (tools/lib/portable.sh)
+  # validates the PNG header and works with GNU and BSD/macOS od.
   local dims
-  dims="$(od -An -tu1 -j16 -N8 "$out" | awk '{print ($1*16777216+$2*65536+$3*256+$4) "x" ($5*16777216+$6*65536+$7*256+$8)}')"
-  [[ "$dims" == "640x360" ]] || { echo "smoke[$size]: unexpected canvas size $dims" >&2; exit 1; }
+  dims="$(png_dims "$out")" || dims="unreadable"
+  [[ "$dims" == "640x360" ]] || { echo "smoke[$size]: unexpected canvas size '$dims' (expected 640x360): $out" >&2; exit 1; }
   [[ -s "$window_out" ]] || { echo "smoke[$size]: missing window capture" >&2; exit 1; }
 }
 
