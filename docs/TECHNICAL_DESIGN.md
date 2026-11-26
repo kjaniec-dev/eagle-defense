@@ -103,7 +103,7 @@ This boundary is **enforced by a test** that statically scans `src/core` and `sr
 - Sources: keyboard and gamepads through the `love.joystick` gamepad API, with an SDL controller DB bundled at a pinned version. Stick input is converted to 4 directions with a dead zone and hysteresis.
 - Direction policy: **last pressed wins**, implemented with a per-player press-order stack.
 - Rebinding is stored in the save data (G8). Hot-plugging is supported. The default assignment is first pad → P1, second → P2.
-- `InputFrame`s are recorded to replay files (`seed`, `level`, `frames`) for tests and bug reports.
+- `InputFrame`s are recorded to replay files for tests and bug reports (`src/sim/replay.lua`, G1): `format`, `arena`, `seed`, `tuning_id`, `tuning_version`, `debug_tuned`, run-length-encoded frame codes (3 characters per player: direction, fire held, fire pressed) and checkpoint hashes every `checkpoint_every` ticks. The runner refuses a replay whose `tuning_id` differs from the active tuning and asserts the tick invariants on every tick. Golden replays live in `tests/fixtures/replays/` and are regenerated only by `tools/update_goldens.lua`, which refuses `debug_tuned` recordings.
 
 ## 8. Rendering and shader architecture
 

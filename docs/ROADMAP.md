@@ -16,8 +16,8 @@ The next milestone never starts automatically.
 
 | ID | Milestone | Key exit criteria | Native macOS acceptance |
 |---|---|---|---|
-| **G0** | Project foundation | The skeleton runs; fixed-step loop and scaling work; input abstraction; the test, lint and format toolchain; CI deferred (target: company GitLab), with `make check` run locally as the gate; documentation. | Yes (launch, scaling, input smoke) |
-| G1 | Core combat | Player movement, turn snapping, shooting, bullets, tank/bullet collisions, test arena, golden replay. *Proposed addition: a static art-direction spike screenshot (24 px vs 32 px), so art feedback arrives early.* | Yes (feel) |
+| G0 | Project foundation (merged) | The skeleton runs; fixed-step loop and scaling work; input abstraction; the test, lint and format toolchain; CI deferred (target: company GitLab), with `make check` run locally as the gate; documentation. | Yes (launch, scaling, input smoke) |
+| G1 | Core combat | Player movement, turn snapping, shooting, bullets, tank/bullet collisions, test arena, golden replays, plus the static art-direction spike (24 px vs 32 px). Plan: `docs/plans/G1_PLAN.md` (approved 2026-11-26). | Yes (feel) |
 | G2 | Battlefield and destruction | Cell grid, partial brick, steel, water, forest, ice, level format + loader + validator | Optional |
 | G3 | Visual vertical slice | Final-quality Classic environment, tanks, HQ, effects, lighting and bloom prototype, pixel-perfect pipeline. **Owner art approval gate.** | Yes (visuals on a real display) |
 | G4 | Enemies and HQ defense | 4 archetypes, spawn rotation, AI, waves, HQ destruction, stage clear, game over | Optional |
