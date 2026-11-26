@@ -18,3 +18,5 @@ files["main.lua"] = { globals = { "love" } }
 -- HiDPI simulation entry point: a LÖVE game directory that wraps
 -- love.graphics constructors (tools/hidpi_sim.sh).
 files["tools/hidpi_sim/"] = { std = "luajit+love", globals = { "love" } }
+-- G1 mockup renderer: a headless LÖVE app directory (CPU-only, no window).
+files["tools/mockup/"] = { std = "luajit+love", globals = { "love" } }

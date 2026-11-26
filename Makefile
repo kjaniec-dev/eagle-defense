@@ -24,7 +24,7 @@ export LUA_CPATH := $(ROCKS)/lib/lua/5.1/?.so;;
 LUA_SOURCES := main.lua conf.lua src config tests tools assets/manifest.lua
 
 .PHONY: help bootstrap toolchain require-toolchain fmt fmt-check lint test validate smoke hidpi-sim love \
-	love-dev run check evidence evidence-dev busted-version luacheck-version stylua-version clean
+	love-dev run check evidence evidence-dev mockups busted-version luacheck-version stylua-version clean
 
 help:
 	@echo "bootstrap  install pinned toolchain for this platform (.rocks/$(PLATFORM)/, .tools/$(PLATFORM)/)"
@@ -41,6 +41,7 @@ help:
 	@echo "check      fmt-check lint test validate smoke hidpi-sim"
 	@echo "evidence   FINAL review evidence package (requires a clean tree; fails closed)"
 	@echo "evidence-dev  development snapshot package (dirty tree allowed, marked DEV)"
+	@echo "mockups    G1 art-direction concept mockups -> docs/art/mockups (CPU only, deterministic)"
 
 bootstrap:
 	./tools/bootstrap.sh
@@ -103,6 +104,12 @@ evidence:
 
 evidence-dev:
 	./tools/evidence.sh --dev
+
+# G1 visual direction spike: concept art only (never shipped). Headless,
+# CPU-only LÖVE run; output PNGs are byte-deterministic.
+mockups:
+	@mkdir -p docs/art/mockups
+	$(LOVE) tools/mockup docs/art/mockups
 
 busted-version: require-toolchain
 	@$(BUSTED) --lua=$(LUAJIT) --version

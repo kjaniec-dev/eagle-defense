@@ -1,0 +1,53 @@
+GIMP Palette
+Name: Eagle Defense master (G1 concept)
+Columns: 8
+#
+# Shared by mockup concepts A (24 px) and B (32 px). Concept art, not final.
+ 10   9  16	void
+ 20  20  33	ink
+ 27  28  36	asph1
+ 34  35  44	asph2
+ 41  42  52	asph3
+ 49  50  61	asph4
+ 60  61  75	metal3
+ 91  93 112	metal4
+143 147 168	metal5
+ 31  36  56	steel1
+ 58  67  97	steel2
+100 112 143	steel3
+155 167 196	steel4
+221 230 244	steel5
+255 255 255	white
+ 64  32  15	gold1
+143  74  20	gold2
+212 140  28	gold3
+246 197  62	gold4
+255 242 163	gold5
+ 11  42  46	teal1
+ 17  91  86	teal2
+ 27 154 128	teal3
+ 71 211 160	teal4
+185 247 210	teal5
+ 42  21  23	brick1
+ 90  39  35	brick2
+138  66  52	brick3
+178 101  75	brick4
+212 145 111	brick5
+ 11  23  54	water1
+ 18  47 102	water2
+ 27  78 150	water3
+ 44 123 194	water4
+111 182 232	water5
+214 240 255	foam
+ 12  34  20	leaf1
+ 23  57  27	leaf2
+ 36  90  34	leaf3
+ 63 127  43	leaf4
+125 172  60	leaf5
+127 164 201	ice2
+176 210 236	ice3
+240 132  36	orange
+207  58  44	red
+114  26  36	crimson
+ 62  42  99	violet1
+123  91 181	violet2
