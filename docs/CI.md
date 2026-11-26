@@ -35,10 +35,25 @@ apt-get install -y love luajit luarocks liblua5.1-0-dev build-essential xvfb zip
 
 `make bootstrap` downloads pinned tools from luarocks.org and from GitHub releases (StyLua). If the company network blocks those hosts, mirror the artifacts internally and keep the SHA-256 pins.
 
+## Toolchain layout
+
+Native tools are installed per platform, so one checkout can be shared by several machines (for example a macOS host and the Docker sandbox that mounts the same directory):
+
+```
+.rocks/<platform>/   busted, luacheck and their C modules (luafilesystem, luasystem, lua-term)
+.tools/<platform>/   StyLua
+```
+
+- `<platform>` is `<os>-<arch>` from `tools/platform.sh`: lowercase `uname -s`, with the architecture normalized to `x86_64` or `arm64`. Supported keys: `darwin-arm64`, `darwin-x86_64`, `linux-arm64`, `linux-x86_64`. An Apple-silicon Mac (`darwin-arm64`) and its Linux container (`linux-arm64`) get different directories.
+- `make toolchain` prints the resolved key, the directories and the Lua search paths. `tools/bootstrap.sh --print-plan` prints the same directories plus the pinned versions and the StyLua asset and SHA-256, without installing anything.
+- Run `make bootstrap` once per platform. Before that, `make check` on that platform stops with "toolchain for <platform> is not installed … run: make bootstrap" instead of running another platform's binaries.
+- Versions and checksums are unchanged: busted 2.3.0-1, luacheck 1.2.0-1, StyLua 2.6.0 with a SHA-256 pin per platform. `tests/tools/toolchain_spec.lua` locks them.
+- **Migrating from the flat layout** (`.rocks/bin`, `.rocks/lib`, `.rocks/share`, `.tools/stylua`): it is no longer used. `make bootstrap` reports it but never deletes it, because in a shared checkout it may belong to another machine. Remove it by hand once every machine has bootstrapped: `rm -rf .rocks/bin .rocks/lib .rocks/share .tools/stylua`.
+
 ## Running the gate on macOS (prerequisites)
 
 - [LÖVE 11.5](https://github.com/love2d/love/releases/tag/11.5) in `/Applications/love.app`. `tools/smoke.sh` finds it automatically if `love` is not on `PATH`.
-- `brew install luajit luarocks shellcheck`, then `make bootstrap` (not yet verified natively).
+- `brew install luajit luarocks shellcheck`, then `make bootstrap`, which installs into `.rocks/darwin-<arch>/` and `.tools/darwin-<arch>/` (not yet verified natively).
 - `zip`, `unzip`, `perl`, `od` and `shasum` ship with macOS. GNU `timeout` is **not** required: `tools/smoke.sh` falls back to `gtimeout`, then to `perl`.
 - Smoke opens real windows, so run it from a logged-in GUI session. Do not use SSH without a display or a LaunchDaemon.
 - Default macOS smoke sizes are the logical sizes `800x600 1024x640 1280x720`. These must fit on the display, otherwise the run fails with "window logical size not applied". Override them with `SMOKE_SIZES="..."`.

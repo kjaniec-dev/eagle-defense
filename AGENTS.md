@@ -10,7 +10,7 @@ A retro top-down tank arcade game built on LÖVE 11.5 (LuaJIT). It has a single-
 
 ## Commands
 ```sh
-make bootstrap   # local toolchain (.rocks/, stylua)
+make bootstrap   # local toolchain per platform (.rocks/<os>-<arch>/, .tools/<os>-<arch>/)
 make check       # fmt-check + lint + test + validate + smoke  — must be green before any PR
 make test        # busted --lua=luajit
 love .           # run the game

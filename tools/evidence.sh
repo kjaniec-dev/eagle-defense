@@ -98,12 +98,13 @@ version_of() { "$@" 2>&1 | head -1 || echo "n/a"; }
   fi
   echo "created:    $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "host:       $(uname -srm)"
+  echo "platform:   $(make --no-print-directory -s toolchain | sed -n 's/^platform=//p') (toolchain in .rocks/<platform>/, .tools/<platform>/)"
   echo "love:       $(version_of love --version)"
   echo "luajit:     $(version_of luajit -v)"
   echo "busted:     $(version_of make --no-print-directory -s busted-version)"
   echo "zip:        $(zip -v 2>/dev/null | sed -n 2p | sed 's/^ *//' || echo n/a)"
-  echo "luacheck:   $(version_of .rocks/bin/luacheck --version)"
-  echo "stylua:     $(version_of .tools/stylua --version)"
+  echo "luacheck:   $(version_of make --no-print-directory -s luacheck-version)"
+  echo "stylua:     $(version_of make --no-print-directory -s stylua-version)"
   echo "shellcheck: $(shellcheck --version 2>/dev/null | sed -n 2p || echo n/a)"
   echo
   echo "EVIDENCE CLASS: automated sandbox/CI evidence (Linux, Xvfb, software GL)."

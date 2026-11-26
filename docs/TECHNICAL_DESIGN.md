@@ -8,7 +8,7 @@ Status: **APPROVED v1.0** (owner, 2026-11-26). Contract changes require owner ap
 |---|---|---|
 | LÖVE | **11.5** (2023-12-03) | This is the latest stable release. No 11.6 release or tag exists (checked against the GitHub API on 2026-11-26), and 12.0 is still unreleased development. The official macOS build is a universal binary (x86_64 + arm64), which was verified. |
 | Lua runtime | LuaJIT 2.1 (bundled with LÖVE) | Code must stay compatible with Lua 5.1 + LuaJIT: no `goto`, no 5.2+ APIs. `bit` is allowed. |
-| Test runner | busted 2.3.0, run with `--lua=luajit` | Installed into a project-local `.rocks/` tree (gitignored) |
+| Test runner | busted 2.3.0, run with `--lua=luajit` | Installed into a project-local, per-platform `.rocks/<os>-<arch>/` tree (gitignored) |
 | Linter | luacheck 1.2.0 | `std = luajit + love` |
 | Formatter | StyLua 2.6.0 | Release binary, pinned by SHA-256 |
 | Shell lint | shellcheck (system package) | Run as part of `make lint` when installed |
@@ -142,7 +142,7 @@ Golden fixtures are regenerated only by an explicit `tools/update_goldens.lua`, 
 
 ## 11. Tooling and CI
 
-- `make bootstrap` installs the rocks into `.rocks/` and downloads the pinned StyLua.
+- `make bootstrap` installs the rocks into `.rocks/<platform>/` and downloads the pinned StyLua into `.tools/<platform>/`. The platform key (`<os>-<arch>`, e.g. `darwin-arm64`, `linux-arm64`) comes from `tools/platform.sh`, the single source used by the Makefile, bootstrap and evidence tooling. A macOS host and a Linux container can therefore share one checkout without overwriting each other's native binaries (details in `docs/CI.md`).
 - `make check` runs `fmt-check`, `lint`, `test`, `validate` and `smoke` (smoke only when `love` and `xvfb-run` exist).
 - **Current gate: `make check` run locally.** CI is deferred by owner decision (2026-11-26).
 - **Target CI: the company GitLab with self-hosted runners.** The project will move from GitHub. The Makefile is the CI contract, so the pipeline only runs `make bootstrap && make check && make love` (see `docs/CI.md`).

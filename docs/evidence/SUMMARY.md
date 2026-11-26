@@ -1,65 +1,45 @@
-# G0 — Project foundation: evidence summary
+# Tooling: per-platform toolchain isolation — evidence summary
 
-## Implemented
-- Approved specification docs (GAME_DESIGN, TECHNICAL_DESIGN, ART_DIRECTION, ROADMAP), AGENTS.md and CLAUDE.md
-- LÖVE 11.5 skeleton (`conf.lua`, `main.lua`) with a custom `love.run`
-- `src/core`:
-  - fixed-step loop (60 Hz, clamped and capped catch-up)
-  - xorshift32 RNG
-  - event queue
-  - explicit state machine with deferred, whitelisted transitions
-  - canonical Lua-literal serializer with a strict, non-executing parser
-- `src/render`:
-  - 640×360 canvas
-  - integer and fit viewport math (HiDPI-aware, in physical pixels)
-  - F3 debug overlay
-  - PLACEHOLDER test pattern
-- `src/input`:
-  - P1/P2 keyboard and gamepad bindings
-  - last-pressed-wins direction resolution
-  - stick-to-4-way conversion with hysteresis
-  - chronological input events with press latching between ticks
-  - pad hot-plug
-- `src/app`: boot → debug sandbox (not gameplay); `--smoke`, `--window`, `--smoke-out`, `--smoke-window-out`
-- Tooling, all pinned:
-  - `make bootstrap`, `make check`
-  - busted, luacheck, StyLua, shellcheck
-  - boundary checker (src/core and src/sim must stay pure)
-  - asset manifest checker
-  - reproducible `.love` built from the exact commit
-  - fail-closed evidence package (`make evidence`), plus a DEV snapshot mode
-- CI: deferred by the owner. The target is the company GitLab; the pipeline contract is in `docs/CI.md`.
+Standalone tooling PR between G0 (merged as `550a9f1`) and G1. It contains no gameplay, simulation, rendering or asset changes. The G0 evidence summary is archived in `docs/evidence/G0.md`.
 
-## Independent review fixes (review of `014cc63`)
+## Problem
+G0 installed native tools into one flat location (`.rocks/bin`, `.rocks/lib`, `.tools/stylua`). The macOS host and the Docker sandbox mount the same checkout, so whichever ran `make bootstrap` last overwrote the other's binaries. For example, the sandbox left Linux arm64 ELF files (`stylua`, `lfs.so`, `system/core.so`, `term/core.so`) where macOS expected Mach-O.
 
-| Finding | Fix | Regression tests |
-|---|---|---|
-| P2-1 input ordering | `devices.lua` records press/release events in chronological order and ignores auto-repeat. `mapper.lua` applies the events in order, then the stick, then reconciles with the polled state. Ties are broken by a fixed order (up < down < left < right). Taps are latched for one tick. The InputFrame contract is unchanged. | `tests/input/mapper_spec.lua`: D→W, W→D, release restores, re-press, tie-break, taps, fire edges, key+pad in both orders, stick after events, replay determinism. `tests/input/devices_spec.lua` uses a fake `love`: event order, auto-repeat, unbound keys, pad→player, hot-plug, end-to-end D→W. On the old implementation they produce 8 failures and 4 errors. |
-| P2-2 macOS smoke and HiDPI | Portable timeout (`timeout` → `gtimeout` → `perl`). Smoke reports `logical`, `physical`, `dpi` and `screenshot` sizes and fails if the screenshot size ≠ physical size or the logical size was not applied. The pixel check runs in physical pixels. There are macOS default sizes and `SMOKE_SIZES`, and the prerequisites are documented in `docs/CI.md`. | `viewport.to_logical` tests at DPI 2, 1.5 and 1.25. The perl timeout fallback was exercised manually (exit 142 after 1 s). The Linux pixel-perfect assertions are unchanged. |
-| P2-3 canonical serialization | The array part is the contiguous prefix `1..n` (never `#t`). Encode and decode share the MAX_DEPTH semantics. The decoder rejects nil values in tables and duplicate keys (tracked separately from values). | Sparse tables built with different insertion histories, output across 2 independent LuaJIT processes, strict-decoding cases, exact depth boundary. On the old implementation they produce 5 failures. |
-| P2-4 evidence integrity | `tools/evidence_gate.lua` (rules in `tools/lib/evidence.lua`): a clean tree is required, including untracked files and ignored files in source paths. All checks are mandatory. The `.love` is built via `git archive HEAD`, with the commit recorded in `.love.commit`. Mandatory files and smoke logs are validated. Copies are verified and checksums are checked before and after archiving. HEAD and the tree are re-checked at the end. Toolchain versions are recorded. `--dev` mode is separate and labelled. | `tests/tools/evidence_spec.lua`: rule unit tests, plus a temporary git repository proving the gate fails on untracked files and on ignored files in `src/`, and that a commit build excludes untracked files and records the exact SHA. |
-| P3-1 PR metadata | The PR description now matches the final HEAD, the results and the full SHA-256. | n/a |
-| P3-2 loader docs | TECHNICAL_DESIGN §9 describes the non-executing parser. No `loadstring` for level or save data. | n/a |
+## Change
+- `tools/platform.sh` (new) is the single source of the platform key `<os>-<arch>`: lowercase `uname -s`, with the architecture normalized to `x86_64`/`arm64`. It rejects keys that are not safe directory names.
+- `tools/bootstrap.sh` installs into `.rocks/<platform>/` and `.tools/<platform>/`. The StyLua asset is selected by platform key, with the same four SHA-256 pins. `--print-plan` prints the resolved plan without installing anything. A legacy flat layout is reported, never deleted.
+- `Makefile` derives `ROCKS`, `TOOLS`, `LUA_PATH` and `LUA_CPATH` from the platform key. New targets:
+  - `make toolchain` prints the resolved key, directories and Lua search paths.
+  - `require-toolchain` stops with a `make bootstrap` hint when this platform is not installed, instead of running another platform's binaries.
+  - `luacheck-version` and `stylua-version`.
+- `tools/evidence.sh` records the platform in `MANIFEST.txt` and reads tool versions through the Makefile (no hard-coded `.rocks/bin` / `.tools/stylua` paths).
+- Docs: README, AGENTS.md, TECHNICAL_DESIGN §11, and CI.md (new "Toolchain layout" section with migration steps).
+- `docs/acceptance/G0-macos.md`: only the reference to the archived G0 summary changed.
 
-A test also caught a bug in the new evidence rules during development (`main.lua.orig` was matched as `main.lua`). It was fixed before commit.
+## Preserved
+- Versions: busted 2.3.0-1, luacheck 1.2.0-1, StyLua 2.6.0.
+- StyLua SHA-256 pins for linux-x86_64, linux-arm64, darwin-arm64 and darwin-x86_64 (byte-identical values).
+- Quality gate: `make check` = fmt-check + lint + test + validate + smoke. Fail-closed `make evidence` is unchanged apart from the manifest lines.
+- On this sandbox (linux-arm64), the freshly bootstrapped `.rocks/linux-arm64/` has exactly the same set of rock names and versions as the old flat tree, and `.tools/linux-arm64/stylua` is byte-identical to the old `.tools/stylua`.
 
-Also found while fixing P2-4: the unanchored `evidence/` pattern in `.gitignore` also ignored `docs/evidence/`, so this summary was never committed. The build-output patterns are now anchored to the repo root, and the gate treats `docs/` as a source path (regression test in `tests/tools/evidence_spec.lua`).
+## Tests
+`tests/tools/toolchain_spec.lua` (13 tests; total suite 156, 0 failures):
+- Platform-key normalization (Darwin/Linux × arm64/aarch64/x86_64/amd64), rejection of unsafe keys, and distinct keys for an Apple-silicon Mac and its Linux container.
+- The Makefile and bootstrap resolve the same directories on this machine.
+- With a fake `uname` reporting Darwin arm64:
+  - every fmt-check, lint and test command goes to `.rocks/darwin-arm64/` and `.tools/darwin-arm64/`;
+  - `LUA_PATH` and `LUA_CPATH` point at the darwin tree;
+  - nothing references the legacy flat paths or this machine's tree.
+- An uninstalled platform fails with the bootstrap hint.
+- Pinned versions, and the StyLua asset and SHA-256 for all four platforms, match G0. A platform without a pin is refused.
+- A legacy flat layout is reported but not deleted, and no warning is shown when only per-platform directories exist.
+- `tests/tools/evidence_spec.lua`: per-platform ignored directories keep the tree clean for final evidence.
+- Mutation check: reverting the Makefile to the flat `.rocks`/`.tools` paths makes 4 toolchain tests fail.
 
-## Automated evidence (sandbox: Linux arm64, Xvfb, Mesa llvmpipe — NOT native)
-- `checks/` in the package holds the full output of fmt-check, lint, test, validate, smoke and love.
-- The smoke test runs the real app for 120 ticks with scripted input at logical window sizes 1280×720, 1920×1080, 1366×768 and 800×600 (DPI 1).
-  - It asserts the final marker positions, which match the pure-logic spec.
-  - It asserts that every physical window pixel equals the nearest-neighbour integer upscale of the canvas, with a black letterbox.
-- Mutation checks:
-  - The loop epsilon mutation is caught by the 144 Hz test.
-  - Last-pressed-wins is covered by the mapper tests.
-  - A half-pixel draw offset is caught by the smoke pixel check.
-  - The old serializer and the old input code fail the new tests.
+## Evidence class (sandbox: Linux arm64, Xvfb, Mesa llvmpipe — NOT native)
+- `make bootstrap` and `make check` ran in the sandbox (linux-arm64).
+- **Not verified natively:** `make bootstrap` / `make check` on macOS (darwin-arm64). The macOS paths are covered only by the fake-`uname` tests above.
+- **Suggested owner check on the Mac:** `make toolchain`, `make bootstrap`, `make check`. Then confirm that `.rocks/linux-arm64/` and `.tools/linux-arm64/` still exist and that the sandbox's `make check` still passes afterwards.
 
-## Known limitations
-- **CI is deferred** (owner decision). The target is the company GitLab. The gate is a local `make check`.
-- **Not verified natively:** macOS rendering, Retina/HiDPI scaling (DPI 2 is covered only by unit math and by the smoke design), real-GPU behavior, gamepads, frame pacing, and `bootstrap.sh` or `smoke.sh` on macOS. These are covered by `docs/acceptance/G0-macos.md` and the optional native `make smoke`.
-- The sandbox debug markers are not gameplay. Their 1.5 px/tick speed is arbitrary.
-
-## Manual acceptance
-`docs/acceptance/G0-macos.md`
+## Not changed
+CI stays disabled. No new runtime or tooling dependencies. No BMAD.

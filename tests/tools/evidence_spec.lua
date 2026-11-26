@@ -27,6 +27,15 @@ describe("evidence rules (review P2-4)", function()
       assert.are.same({}, evidence.tree_problems(porcelain))
     end)
 
+    it(
+      "accepts per-platform toolchain directories (.rocks/<platform>/, .tools/<platform>/)",
+      function()
+        local porcelain =
+          "!! .rocks/darwin-arm64/\n!! .rocks/linux-arm64/\n!! .tools/darwin-arm64/stylua\n"
+        assert.are.same({}, evidence.tree_problems(porcelain))
+      end
+    )
+
     it("rejects untracked files", function()
       local p = evidence.tree_problems("?? src/new_module.lua\n")
       assert.are.equal(1, #p)
