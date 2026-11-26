@@ -9,7 +9,7 @@
 #     DPI 1, fit-mode prescale canvas (640k)x(360k) at DPI 1, exact pixel and
 #     letterbox counts, and linear filtering in fit mode;
 #   * show that the simulation was in effect (HIDPI_SIM probe line);
-#   * apply the requested window size and reach the expected marker positions;
+#   * apply the requested window size and reach the expected arena outcome;
 #   * produce canvas and window PNGs byte-identical to the scale-1 reference
 #     of the same mode. This catches any implicit-DPI resource drawn into the
 #     canvas (e.g. a font), even when the in-app checks pass.
@@ -29,6 +29,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$ROOT/tools/lib/portable.sh"
 # shellcheck source=tools/lib/hidpi_labels.sh
 . "$ROOT/tools/lib/hidpi_labels.sh"
+# shellcheck source=tools/lib/smoke_expect.sh
+. "$ROOT/tools/lib/smoke_expect.sh"
 OS="$(uname -s)"
 MUTATIONS=0
 if [[ "${1:-}" == "--mutations" ]]; then
@@ -96,7 +98,7 @@ run_case() {
     while IFS= read -r l; do [[ -n "$l" ]] && labels+=("$l"); done < <(labels_for_problems "$problems")
     [[ "$line" == "SMOKE OK "* ]] || [[ ${#labels[@]} -gt 0 ]] || labels+=("other-check")
     [[ "$line" == *" logical=$size "* ]] || labels+=("window-size-not-applied")
-    [[ "$line" == *"ticks=$TICKS "*"p1=5600,4992 p2=4256,3552 "* ]] || labels+=("tick-or-markers")
+    [[ "$line" == *"ticks=$TICKS "*" $SMOKE_EXPECT_120 "* ]] || labels+=("tick-or-markers")
   fi
   [[ $code -eq 0 ]] || [[ ${#labels[@]} -gt 0 ]] || labels+=("exit-$code")
   if [[ -s "$canvas" ]]; then
@@ -163,7 +165,7 @@ replace_once() {
 MUTATIONS_TABLE=(
   'game-canvas|src/render/screen.lua|newCanvas(self.w, self.h, { dpiscale = 1 })|newCanvas(self.w, self.h)|game-canvas-dpi|prescale-canvas-dpi'
   'prescale-canvas|src/render/screen.lua|newCanvas(self.w * k, self.h * k, { dpiscale = 1 })|newCanvas(self.w * k, self.h * k)|prescale-canvas-dpi|game-canvas-dpi'
-  'font|src/render/test_pattern.lua|newFont(10, "mono", 1)|newFont(10, "mono")|content-vs-reference|game-canvas-dpi prescale-canvas-dpi'
+  'font|src/render/arena_view.lua|newFont(10, "mono", 1)|newFont(10, "mono")|content-vs-reference|game-canvas-dpi prescale-canvas-dpi'
   'fit-filter|src/render/screen.lua|c:setFilter("linear", "linear")|c:setFilter("nearest", "nearest")|fit-filtering|game-canvas-dpi prescale-canvas-dpi'
 )
 

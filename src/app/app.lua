@@ -43,13 +43,21 @@ function App.load(argv)
   ctx.quit = function()
     App.exit_code = 0
   end
+  -- Writes a replay recording into the save directory; returns its path.
+  ctx.save_replay = function(rec)
+    love.filesystem.createDirectory("replays")
+    App.saved = (App.saved or 0) + 1
+    local name = ("replays/arena-%d-%d.lua"):format(rec.checkpoints[#rec.checkpoints][1], App.saved)
+    love.filesystem.write(name, require("src.core.serialize").encode(rec))
+    return love.filesystem.getSaveDirectory() .. "/" .. name
+  end
   App.machine = statemachine.new({
     states = {
       boot = require("src.app.states.boot").new(ctx),
-      sandbox = require("src.app.states.sandbox").new(ctx),
+      arena = require("src.app.states.arena").new(ctx),
     },
     transitions = {
-      boot = { sandbox = true },
+      boot = { arena = true },
     },
   })
   ctx.machine = App.machine
@@ -158,19 +166,17 @@ local function smoke_report(window_image)
     end, window_px)
   end
 
-  local m = App.machine.current.markers or {}
-  local function pos(i)
-    return m[i] and ("%d,%d"):format(m[i].x, m[i].y) or "-"
-  end
+  local info = App.machine.current.smoke_info and App.machine.current:smoke_info() or {}
   local renderer = { love.graphics.getRendererInfo() }
   local passed = #problems == 0
   local parts = {
-    ("SMOKE %s ticks=%d state=%s p1=%s p2=%s"):format(
+    ("SMOKE %s ticks=%d state=%s p1=%s p2=%s hash=%s"):format(
       passed and "OK" or "FAIL",
       App.loop.tick,
       App.machine.current_name,
-      pos(1),
-      pos(2)
+      info.p1 or "-",
+      info.p2 or "-",
+      info.hash or "-"
     ),
     ("logical=%dx%d physical=%dx%d dpi=%.2f screenshot=%dx%d"):format(lw, lh, pw, ph, dpi, ww, wh),
     ("mode=%s canvas=%dx%d canvas_dpi=%.2f"):format(screen.mode, cw, ch, setup.canvas_dpi),
@@ -226,6 +232,9 @@ end
 
 function App.keypressed(key, scancode, isrepeat)
   App.devices:keypressed(key, scancode, isrepeat)
+  if not isrepeat then
+    App.machine:dispatch("keypressed", key)
+  end
   if key == "f3" then
     App.overlay_on = not App.overlay_on
   elseif key == "f4" then

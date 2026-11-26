@@ -39,7 +39,16 @@ describe("app.args", function()
 
   it("produces deterministic scripted smoke input", function()
     assert.are.same(args.smoke_frame(10), args.smoke_frame(10))
-    assert.are.equal("right", args.smoke_frame(1)[1].dir)
-    assert.are.equal("down", args.smoke_frame(61)[1].dir)
+    assert.are.same({ "up", "left" }, { args.smoke_frame(1)[1].dir, args.smoke_frame(1)[2].dir })
+    assert.are.same({ "right", "up" }, { args.smoke_frame(61)[1].dir, args.smoke_frame(61)[2].dir })
+    -- one press per scripted shot, fire held for 3 ticks
+    assert.are.same(
+      { true, true },
+      { args.smoke_frame(1)[1].fire_pressed, args.smoke_frame(3)[1].fire }
+    )
+    assert.are.same(
+      { false, false },
+      { args.smoke_frame(2)[1].fire_pressed, args.smoke_frame(4)[1].fire }
+    )
   end)
 end)
