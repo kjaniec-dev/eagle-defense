@@ -65,17 +65,17 @@ local EAGLE24 = {
   "......EEr",
   "......Err",
   "......Fcr",
-  "......WEE",
-  ".....WF.E",
-  "....WF...",
+  ".......WE",
+  "......WFE",
+  "......F.F",
 }
 
 -- head in profile (beak to the left), overlaid on the mirrored emblem
 local HEAD24 = {
-  { 8, 0, "WE" },
-  { 7, 1, "WEEF" },
-  { 6, 2, "yEnEF" },
-  { 6, 3, "oWEF" },
+  { 8, 0, "WWE" },
+  { 7, 1, "WnnEF" },
+  { 5, 2, "yyEYEEF" },
+  { 5, 3, "noWEEF" },
   { 7, 4, "EEEF" },
 }
 
@@ -130,18 +130,18 @@ local EAGLE32 = {
   "........FrWc",
   ".........rcc",
   ".........Ecc",
-  "........WEE.",
-  ".......WFEFE",
-  "......WF..F.",
+  "..........WE",
+  ".........WFE",
+  ".........F.F",
 }
 
 local HEAD32 = {
-  { 11, 0, "WE" },
-  { 10, 1, "WEEF" },
-  { 9, 2, "WEEEFF" },
-  { 8, 3, "yyEnEF" },
-  { 8, 4, "oWEEEF" },
-  { 9, 5, "oEEEF" },
+  { 10, 0, "WWWE" },
+  { 9, 1, "WWEEEF" },
+  { 8, 2, "WnnnEEF" },
+  { 6, 3, "yyyEYEEEF" },
+  { 6, 4, "nyoEEEEF" },
+  { 7, 5, "noWEEEF" },
   { 10, 6, "EEEF" },
 }
 

@@ -14,6 +14,7 @@ The following are **not** covered by the PolyForm license. They may not be copie
 
 - everything under `assets/` (sprites, tilesets, shaders, audio, music, fonts created for the game)
 - everything under `levels/`
+- the G1 concept art in `docs/art/mockups/` and the pixel-art definitions it is rendered from (`tools/mockup/art/`): authored by an AI agent (Claude) as code-defined pixel art, never shipped (provenance in `docs/art/mockups/README.md`)
 - the "Eagle Defense" name, logo and visual identity
 
 Third-party assets inside `assets/` keep their own licenses, which are recorded in `assets/PROVENANCE.md` and `assets/manifest.lua`.

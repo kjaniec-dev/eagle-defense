@@ -33,8 +33,10 @@ function M.build(f)
         blobs[#blobs + 1] = {
           x = cx,
           y = cy,
-          r = R - noise.rand(i, j, 53, 2),
+          r = R - noise.rand(i, j, 53, 3),
           seed = noise.rand(i, j, 54, 1000),
+          -- canopy layers: lower clusters sit one tone deeper
+          depth = noise.rand(i, j, 56, 3) == 0 and 1 or 0,
         }
       end
     end
@@ -86,17 +88,18 @@ function M.build(f)
       local tex = noise.rand(math.floor(x / 2) + best.seed, math.floor(y / 2), 55, 100)
       light = light + (tex - 50) / 300
       local t
-      if d > 0.8 and light < -0.15 then
+      if d > 0.78 and light < -0.05 then
         t = 1
-      elseif light > 0.42 and d > 0.4 and tex > 30 then
+      elseif light > 0.55 and d > 0.45 and tex > 55 then
         t = 5
-      elseif light > 0.08 then
+      elseif light > 0.15 then
         t = 4
-      elseif light > -0.4 then
+      elseif light > -0.35 then
         t = 3
       else
         t = 2
       end
+      t = math.max(1, t - best.depth)
       col = LEAF[t]
     end
     -- fair edge hint: the outer band lets darkened ground/tanks show through

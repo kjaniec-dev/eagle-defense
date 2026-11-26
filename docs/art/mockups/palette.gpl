@@ -42,8 +42,8 @@ Columns: 8
  12  34  20	leaf1
  23  57  27	leaf2
  36  90  34	leaf3
- 63 127  43	leaf4
-125 172  60	leaf5
+ 58 116  41	leaf4
+110 154  55	leaf5
 127 164 201	ice2
 176 210 236	ice3
 240 132  36	orange

@@ -52,8 +52,8 @@ local COLORS = {
   { "leaf1", "0c2214" },
   { "leaf2", "17391b" },
   { "leaf3", "245a22" },
-  { "leaf4", "3f7f2b" },
-  { "leaf5", "7dac3c" },
+  { "leaf4", "3a7429" },
+  { "leaf5", "6e9a37" },
   -- ice
   { "ice2", "7fa4c9" },
   { "ice3", "b0d2ec" },

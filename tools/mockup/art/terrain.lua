@@ -106,11 +106,12 @@ function M.water(f, x, y)
   local px = T == 24 and 12 or 16
   local row = math.floor(y / py)
   local ry = y - row * py - 1
-  local cx = x + (row % 2) * math.floor(px / 2)
+  local cx = x + noise.rand(row, 7, 22, px)
   local cell = math.floor(cx / px)
   local jitter = noise.rand(cell, row, 23, px - sw + 1)
   local wx = cx - cell * px - jitter
-  if noise.rand(cell, row, 24, 10) < 6 and wx >= 0 and wx < sw and ry >= 0 and ry < sh then
+  local active = noise.rand(cell, row, 24, 10) < 5
+  if active and wx >= 0 and wx < sw and ry >= 0 and ry < sh then
     local ch = stamp[ry + 1]:sub(wx + 1, wx + 1)
     if ch == "5" then
       col = (wx == math.floor(sw / 2) and noise.rand(cell, row, 25, 4) == 0) and P("foam")
@@ -164,6 +165,13 @@ function M.ice(f, x, y)
     if d == math.floor(band / 2) and noise.rand(x, y, 31, 4) == 0 then
       col = P("foam")
     end
+  end
+  -- frost: sparse pale specks and darker pits
+  local fr = noise.rand(x, y, 34, 1000)
+  if fr < 14 then
+    col = P("ice3")
+  elseif fr < 20 then
+    col = P("steel3")
   end
   -- thin secondary streak
   local d2 = (x + y + T) % (T * 3)

@@ -47,6 +47,13 @@ M.DAMAGE = {
   ["10,11"] = { "1..1", "1111", "1111", "1111" },
 }
 
+-- Cracks in the ice field (tile units).
+M.ICE_CRACKS = {
+  { { 6.3, 8.1 }, { 6.9, 8.6 }, { 7.2, 8.5 }, { 7.6, 9.1 }, { 7.5, 9.6 } },
+  { { 6.9, 8.6 }, { 6.6, 9.2 }, { 6.8, 9.8 } },
+  { { 9.7, 8.2 }, { 9.2, 8.7 }, { 9.3, 9.3 } },
+}
+
 -- Hairline cracks in the asphalt (tile units).
 M.CRACKS = {
   { { 0.2, 3.4 }, { 0.8, 3.2 }, { 1.4, 3.6 }, { 2.1, 3.5 }, { 2.6, 3.9 } },
@@ -106,9 +113,10 @@ end
 -- Tread imprints behind a tank (fading), drawn on ground/ice.
 local function track_marks(c, f, x, y, dir, len)
   local T = f.T
-  local tw = T == 24 and 4 or 5
+  local tw = T == 24 and 4 or 6
+  local period = T == 24 and 3 or 4
   for i = 0, len - 1 do
-    for k = 0, tw - 1 do
+    for k = 1, tw - 2 do
       for side = 0, 1 do
         local lx = side == 0 and (1 + k) or (T - 2 - k)
         local px, py
@@ -119,12 +127,19 @@ local function track_marks(c, f, x, y, dir, len)
         else
           px, py = x + T + i, y + lx
         end
-        local fade = i / len
+        -- fades out over the length; ordered dither keeps it crisp
+        local fade = (i + 2) / (len + 2)
         local along = (dir == "left") and px or py
-        if along % 3 ~= 2 and noise.bayer(px, py) / 16 >= fade and k > 0 and k < tw - 1 then
+        local phase = along % period
+        if noise.bayer(px, py) / 16 >= fade then
           local v = canvas.get(c, px, py)
-          if v then
-            canvas.set(c, px, py, palette.shadow[v])
+          local ground = f.tile(math.floor((px - f.ox) / T), math.floor((py - f.oy) / T)) == "."
+          if v and ground then
+            if phase == 0 then
+              canvas.set(c, px, py, palette.shadow[palette.shadow[v]])
+            elseif phase == 1 then
+              canvas.set(c, px, py, palette.shadow[v])
+            end
           end
         end
       end
@@ -160,6 +175,23 @@ function M.render(spec)
     end
   end
 
+  terrain.cracks(
+    function(x, y, v)
+      canvas.set(c, ox + x, oy + y, v)
+    end,
+    f,
+    M.ICE_CRACKS,
+    P("steel3"),
+    P("ice3"),
+    function(x, y)
+      return x >= 0
+        and y >= 0
+        and x < FW
+        and y < FW
+        and f.tile(math.floor(x / T), math.floor(y / T)) == "I"
+    end
+  )
+
   -- 2. decals: cracks, scorch under the explosion, tread marks
   terrain.cracks(
     function(x, y, v)
@@ -185,9 +217,9 @@ function M.render(spec)
     local x, y = ox + math.floor(t[3] * T), oy + math.floor(t[4] * T)
     sprites[#sprites + 1] = { s = s, x = x, y = y, t = t }
   end
-  track_marks(c, f, sprites[1].x, sprites[1].y, "up", math.floor(T * 0.9))
-  track_marks(c, f, sprites[2].x, sprites[2].y, "up", math.floor(T * 0.6))
-  track_marks(c, f, sprites[3].x, sprites[3].y, "down", math.floor(T * 0.5))
+  track_marks(c, f, sprites[1].x, sprites[1].y, "up", math.floor(T * 1.25))
+  track_marks(c, f, sprites[2].x, sprites[2].y, "up", math.floor(T * 0.75))
+  track_marks(c, f, sprites[3].x, sprites[3].y, "down", math.floor(T * 0.75))
 
   -- 3. drop shadows (single palette remap per pixel)
   local sh = T == 24 and 2 or 3
@@ -275,7 +307,8 @@ function M.render(spec)
   fx.bullet(c, T, shot_x, shot_y, "up", "player")
   fx.bullet(c, T, ox + math.floor(7.6 * T), oy + math.floor(6.5 * T), "left", "enemy")
 
-  -- 9. explosion, muzzle flash
+  -- 9. spawn marker (top-right spawn point), explosion, muzzle flash
+  fx.spawn_marker(c, T, ox + 12 * T, oy)
   fx.explosion(c, T, ex, ey)
   fx.muzzle(c, T, muzzle_x, muzzle_y)
 

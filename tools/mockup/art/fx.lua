@@ -249,10 +249,12 @@ function M.explosion(c, T, cx, cy)
             local lam = -(dx + dy) / s[3] + (noise.bayer(x, y) - 7.5) / 12
             local col
             if d2 > (s[3] - 1) * (s[3] - 1) and dx + dy > 0 then
-              col = P("ink")
-            elseif lam > 0.6 then
+              col = P("asph3")
+            elseif lam > 0.75 then
+              col = P("metal5")
+            elseif lam > 0.1 then
               col = P("metal4")
-            elseif lam > -0.4 then
+            elseif lam > -0.6 then
               col = P("metal3")
             else
               col = P("asph4")
@@ -297,6 +299,49 @@ function M.scorch(c, T, cx, cy)
           v = P("crimson")
         end
         canvas.set(c, x, y, v)
+      end
+    end
+  end
+end
+
+-- Enemy spawn marker (original): four corner brackets closing in on a cool
+-- diamond core, one frame of the ~1 s warning before a tank appears.
+function M.spawn_marker(c, T, x, y)
+  local arm = T == 24 and 6 or 8
+  local inset = T == 24 and 3 or 4
+  local function bracket(cx, cy, sx, sy)
+    for i = 0, arm - 1 do
+      local col = i < 2 and P("white") or (i < arm - 2 and P("foam") or P("water5"))
+      canvas.set(c, cx + sx * i, cy, col)
+      canvas.set(c, cx, cy + sy * i, col)
+      -- dark backing so the bracket reads on any terrain
+      canvas.set(c, cx + sx * i + 1, cy + 1, canvas.get(c, cx + sx * i + 1, cy + 1) and P("void"))
+      canvas.set(c, cx + 1, cy + sy * i + 1, canvas.get(c, cx + 1, cy + sy * i + 1) and P("void"))
+    end
+  end
+  local a, b = inset, T - 1 - inset
+  bracket(x + a, y + a, 1, 1)
+  bracket(x + b, y + a, -1, 1)
+  bracket(x + a, y + b, 1, -1)
+  bracket(x + b, y + b, -1, -1)
+  -- diamond core
+  local r = T == 24 and 3 or 4
+  local cx, cy = x + T / 2, y + T / 2
+  for dy = -r, r do
+    for dx = -r, r do
+      local d = math.abs(dx) + math.abs(dy)
+      if d <= r then
+        local col
+        if d == r then
+          col = P("water4")
+        elseif d == 0 then
+          col = P("white")
+        elseif dx + dy < 0 then
+          col = P("foam")
+        else
+          col = P("water5")
+        end
+        canvas.set(c, cx + dx, cy + dy, col)
       end
     end
   end
