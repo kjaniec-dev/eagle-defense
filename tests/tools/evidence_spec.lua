@@ -37,6 +37,10 @@ describe("evidence rules (review P2-4)", function()
       assert.are.equal(2, #evidence.tree_problems(" M src/core/loop.lua\nA  tools/x.sh\n"))
     end)
 
+    it("rejects ignored files under docs/ (evidence copies docs/evidence/SUMMARY.md)", function()
+      assert.are.equal(1, #evidence.tree_problems("!! docs/evidence/SUMMARY.md\n"))
+    end)
+
     it("rejects ignored files inside source paths", function()
       local p = evidence.tree_problems("!! src/core/debug.love\n!! main.lua.orig\n")
       assert.are.equal(1, #p) -- main.lua.orig is not main.lua

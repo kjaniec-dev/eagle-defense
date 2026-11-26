@@ -3,14 +3,14 @@
 .worktree/
 
 # Local toolchain
-.rocks/
-.tools/
+/.rocks/
+/.tools/
 
-# Build outputs
-build/
-dist/
+# Build outputs (anchored to the repo root, so e.g. docs/evidence/ is NOT ignored)
+/build/
+/dist/
 *.love
-evidence/
+/evidence/
 
 # Editor / agent tooling (machine-local)
 .serena/

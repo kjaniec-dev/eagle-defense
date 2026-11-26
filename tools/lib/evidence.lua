@@ -16,6 +16,7 @@ M.SOURCE_PATHS = {
   "assets/",
   "tests/",
   "tools/",
+  "docs/",
   "Makefile",
   ".busted",
   ".luacheckrc",
