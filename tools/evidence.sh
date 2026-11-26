@@ -101,7 +101,7 @@ version_of() { "$@" 2>&1 | head -1 || echo "n/a"; }
   echo "love:       $(version_of love --version)"
   echo "luajit:     $(version_of luajit -v)"
   echo "busted:     $(version_of make --no-print-directory -s busted-version)"
-  echo "zip:        $(version_of zip -v | sed -n 2p)"
+  echo "zip:        $(zip -v 2>/dev/null | sed -n 2p | sed 's/^ *//' || echo n/a)"
   echo "luacheck:   $(version_of .rocks/bin/luacheck --version)"
   echo "stylua:     $(version_of .tools/stylua --version)"
   echo "shellcheck: $(shellcheck --version 2>/dev/null | sed -n 2p || echo n/a)"
