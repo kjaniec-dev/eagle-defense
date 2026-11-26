@@ -8,9 +8,10 @@ Status: **APPROVED v1.0** (owner, 2026-11-26). Contract changes require owner ap
 |---|---|---|
 | LÖVE | **11.5** (2023-12-03) | This is the latest stable release. No 11.6 release or tag exists (checked against the GitHub API on 2026-11-26), and 12.0 is still unreleased development. The official macOS build is a universal binary (x86_64 + arm64), which was verified. |
 | Lua runtime | LuaJIT 2.1 (bundled with LÖVE) | Code must stay compatible with Lua 5.1 + LuaJIT: no `goto`, no 5.2+ APIs. `bit` is allowed. |
-| Test runner | busted 2.x, run with `--lua=luajit` | Installed into a project-local `.rocks/` tree (gitignored) |
+| Test runner | busted 2.3.0, run with `--lua=luajit` | Installed into a project-local `.rocks/` tree (gitignored) |
 | Linter | luacheck 1.2.0 | `std = luajit + love` |
 | Formatter | StyLua 2.6.0 | Release binary, pinned by SHA-256 |
+| Workflow / shell lint | actionlint 1.7.12 (SHA-256 pinned), shellcheck (system) | Run as part of `make lint` |
 
 12.0 migration policy: avoid APIs that are deprecated in 12. Any migration requires an approved technical decision.
 
