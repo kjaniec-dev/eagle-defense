@@ -230,6 +230,9 @@ Implementation clarifications from the plan review (no scope expansion; each has
 2. **Respawn timing** is reconciled with the documented tick order (TECHNICAL_DESIGN §5): a player hit in tick T is removed in T's removal phase and placed in tick T+1's respawn phase, which runs after T+1's bullet phase. A bullet inside the spawn box therefore resolves in the first bullet phase after placement (tick T+2). Bullets never block a respawn.
 3. **Swept projectile collision** must not cancel perpendicular bullets that cross the same region at different times. Bullet vs bullet uses an exact continuous test on the relative motion within the sub-step (integer arithmetic), not an overlap of the two swept boxes (TECHNICAL_DESIGN §6).
 
+Clarification from the G1 independent review of PR #3 (2026-11-27; narrow, no G6 friendly-fire mechanics):
+4. **Mixed-faction simultaneous hits:** when friendly and hostile bullets overlap the same tank in one sub-step, all of them are still consumed and the tank still takes one effective hit, but that hit is the first hostile bullet in bullet order, never a friendly one listed earlier. Other collision priorities are unchanged (TECHNICAL_DESIGN §6).
+
 Also in G1 (owner, PR #2 acceptance): the BSD grep portability correction for `tools/hidpi_sim.sh` with a regression test, as a separate commit.
 
 Process: Fast Track workflow without intermediate approvals unless a material blocker or contract change occurs. CI stays disabled. No BMAD. G1 is delivered as a Draft PR and is merged only on explicit owner authorization; G2 is not started automatically.

@@ -204,6 +204,74 @@ describe("sim bullet collisions", function()
     assert.are.equal(1404 + 128, w.bullets[1].y)
   end)
 
+  -- Review clarification 4: a friendly bullet listed first must not
+  -- suppress a hostile hit on the same tank in the same sub-step.
+  for _, order in ipairs({ "friendly first", "hostile first" }) do
+    it(
+      "a hostile and a friendly bullet on one player: the hostile hit counts (" .. order .. ")",
+      function()
+        local w = world()
+        local p1 = w.tanks[1]
+        p1.x, p1.y = 1536, 1536
+        local friendly_shot = function()
+          return H.add_bullet(w, 2, 1500, 1600, "right", 10) -- P2, overlaps after sub-step 1
+        end
+        local hostile_shot = function()
+          return H.add_bullet(w, 4, 1796, 1600, "left", 10) -- target 4, overlaps after sub-step 1
+        end
+        local hostile
+        if order == "friendly first" then
+          friendly_shot()
+          hostile = hostile_shot()
+        else
+          hostile = hostile_shot()
+          friendly_shot()
+        end
+        sim.step(w, nil)
+        local ev = w.events:drain()
+        local hits = H.of_type(ev, "tank_hit")
+        assert.are.equal(1, #hits) -- one effective hit per tank
+        assert.are.same(
+          { 1, 4, hostile.id, false },
+          { hits[1].tank, hits[1].by, hits[1].bullet, hits[1].friendly }
+        )
+        assert.are.equal(1, p1.hits)
+        assert.is_false(p1.present) -- the hostile hit removed the player
+        assert.are.equal(0, #w.bullets) -- both bullets consumed
+        assert.are.equal(0, #H.of_type(ev, "bullet_cancel"))
+      end
+    )
+  end
+
+  it("prefers the first hostile bullet in bullet order among several", function()
+    local w = world()
+    local p1 = w.tanks[1]
+    p1.x, p1.y = 1536, 1536
+    H.add_bullet(w, 2, 1500, 1560, "right", 10) -- friendly
+    H.add_bullet(w, 3, 1796, 1560, "left", 10) -- hostile, first
+    H.add_bullet(w, 4, 1796, 1700, "left", 10) -- hostile, second
+    sim.step(w, nil)
+    local hits = H.of_type(w.events:drain(), "tank_hit")
+    assert.are.equal(1, #hits)
+    assert.are.same({ 3, false }, { hits[1].by, hits[1].friendly })
+    assert.are.equal(0, #w.bullets)
+  end)
+
+  it("friendly bullets alone still give one friendly hit with no effect", function()
+    local w = world()
+    local p1 = w.tanks[1]
+    p1.x, p1.y = 1536, 1536
+    H.add_bullet(w, 2, 1500, 1600, "right", 10)
+    H.add_bullet(w, 2, 1796, 1600, "left", 10)
+    sim.step(w, nil)
+    local hits = H.of_type(w.events:drain(), "tank_hit")
+    assert.are.equal(1, #hits)
+    assert.is_true(hits[1].friendly)
+    assert.are.equal(0, p1.hits)
+    assert.is_true(p1.present)
+    assert.are.equal(0, #w.bullets)
+  end)
+
   it("never hits the owner tank", function()
     local w = world()
     local p1 = w.tanks[1]

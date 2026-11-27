@@ -251,14 +251,18 @@ function M.phase(w)
         end
       end
     end
-    -- (c) tanks: every overlapping bullet is consumed, each tank hit once
+    -- (c) tanks: every overlapping bullet is consumed, each tank hit once.
+    -- The effective hit is the first hostile bullet in bullet order, else
+    -- the first friendly one, so a friendly hit never suppresses a hostile
+    -- one (G1 review clarification 4).
     local hit_by = {}
     for _, b in ipairs(list) do
       if b.alive then
         local t = tank_at(w, b)
         if t then
           b.alive = false
-          if not hit_by[t.id] then
+          local cur = hit_by[t.id]
+          if not cur or (cur.faction == t.faction and b.faction ~= t.faction) then
             hit_by[t.id] = b
           end
         end

@@ -54,7 +54,7 @@ Units: **tiles** = playfield tiles (the playfield is 13×13 tiles). **cells** = 
 | Bullet speed | Normal and fast (star 1+ and the Power enemy) | DOC (qualitative) | Placeholders: normal 4 tiles/s (17 u/tick = 3.98 tiles/s), fast 8 tiles/s (34 u/tick = 7.97 tiles/s), tuned by the owner in G1. Bullet size 32 × 32 u (⅛ tile) is **UNV**. |
 | Bullet vs bullet | Opposing bullets cancel each other | CC | Player and enemy bullets cancel. Bullets from the same faction pass through each other (UNV). |
 | Point-blank shot | Unknown | UNV | A bullet whose spawn box (on the tank's front edge) already overlaps something resolves at once: opposing bullet → cancel, tank → hit, wall or bound → `bullet_hit_solid` without travel (G1). |
-| Friendly bullet (G1) | A hit stuns the partner (see §4.6) | CC | Until the stun arrives in G6, a player bullet that reaches the other player is consumed and reported as a friendly `tank_hit` with no other effect. |
+| Friendly bullet (G1) | A hit stuns the partner (see §4.6) | CC | Until the stun arrives in G6, a player bullet that reaches the other player is consumed and reported as a friendly `tank_hit` with no other effect. If a hostile bullet hits the same player in the same sub-step, the hostile hit is the one that counts. |
 | Bullet vs water and forest | Passes over them | CC | Same |
 | Bullet vs edge of the field | Bullet is destroyed | CC | Same, with a "spark" event |
 
