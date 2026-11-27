@@ -46,18 +46,32 @@ function M.parse(argv)
   return opts
 end
 
--- Scripted input for smoke runs: P1 drives right then down while firing,
--- and P2 drives up then left. The result is deterministic by tick.
+-- Scripted input for smoke runs in the G1 arena. P1 drives up, then right;
+-- P2 drives left, then up. Both press fire a few times (held for 3 ticks).
+-- The result is deterministic by tick; tests/app/arena_spec.lua pins the
+-- 120-tick outcome that tools/smoke.sh checks.
+local P1_PRESSES = { [1] = true, [40] = true, [90] = true }
+local P2_PRESSES = { [20] = true, [100] = true }
+
+local function held(presses, tick)
+  return presses[tick] or presses[tick - 1] or presses[tick - 2] or false
+end
+
 function M.smoke_frame(tick)
   local first = tick <= 60
   return {
     {
-      dir = first and "right" or "down",
-      fire = true,
-      fire_pressed = tick == 1,
+      dir = first and "up" or "right",
+      fire = held(P1_PRESSES, tick),
+      fire_pressed = P1_PRESSES[tick] == true,
       pause_pressed = false,
     },
-    { dir = first and "up" or "left", fire = false, fire_pressed = false, pause_pressed = false },
+    {
+      dir = first and "left" or "up",
+      fire = held(P2_PRESSES, tick),
+      fire_pressed = P2_PRESSES[tick] == true,
+      pause_pressed = false,
+    },
   }
 end
 

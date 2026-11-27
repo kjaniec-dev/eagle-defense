@@ -2,7 +2,7 @@
 # Headless/real-window smoke test. It runs the real LÖVE app for N fixed
 # ticks with scripted input, captures the canvas and the window
 # backbuffer, verifies pixel-perfect integer scaling in PHYSICAL pixels,
-# and checks the expected debug-marker positions.
+# and checks the expected arena outcome (positions and sim hash).
 #
 # Usage: tools/smoke.sh [TICKS] [OUT_PNG] [WINDOW_SIZES]
 #   WINDOW_SIZES: space-separated *logical* WxH list (window points).
@@ -22,6 +22,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=tools/lib/portable.sh
 . "$ROOT/tools/lib/portable.sh"
+# shellcheck source=tools/lib/smoke_expect.sh
+. "$ROOT/tools/lib/smoke_expect.sh"
 OS="$(uname -s)"
 TICKS="${1:-120}"
 OUT="${2:-$ROOT/build/smoke.png}"
@@ -92,10 +94,14 @@ smoke_one() {
     exit 1
   }
 
-  # Expected positions for the 120-tick script are asserted in
-  # tests/app/sandbox_spec.lua. Here we check that the real app agrees.
+  # The expected outcome of the 120-tick script (positions and sim hash) is
+  # pinned in tools/lib/smoke_expect.sh and checked against the pure
+  # simulation by tests/app/arena_spec.lua. Here the real app must agree.
   if [[ "$TICKS" == "120" ]]; then
-    grep -q 'p1=5600,4992 p2=4256,3552' "$log" || { echo "smoke[$size]: marker positions differ" >&2; exit 1; }
+    grep -q " $SMOKE_EXPECT_120 " "$log" || {
+      echo "smoke[$size]: arena outcome differs (expected $SMOKE_EXPECT_120)" >&2
+      exit 1
+    }
   fi
 
   # The canvas PNG IHDR must be 640x360. png_dims (tools/lib/portable.sh)

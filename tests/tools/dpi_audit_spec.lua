@@ -15,7 +15,7 @@ describe("dpi audit (explicit pixel density for graphics resources)", function()
     local screen = fs.read("src/render/screen.lua")
     assert.is_truthy(screen:find("newCanvas(self.w, self.h, { dpiscale = 1 })", 1, true))
     assert.is_truthy(screen:find("newCanvas(self.w * k, self.h * k, { dpiscale = 1 })", 1, true))
-    assert.is_truthy(fs.read("src/render/test_pattern.lua"):find('newFont(10, "mono", 1)', 1, true))
+    assert.is_truthy(fs.read("src/render/arena_view.lua"):find('newFont(10, "mono", 1)', 1, true))
     assert.is_truthy(fs.read("src/render/debug_overlay.lua"):find(dpi_audit.NATIVE_MARKER, 1, true))
   end)
 

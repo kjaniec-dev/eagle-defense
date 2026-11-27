@@ -1,6 +1,6 @@
 # Eagle Defense — Technical Design v1.0
 
-Status: **APPROVED v1.0** (owner, 2026-11-26). Contract changes require owner approval.
+Status: **APPROVED v1.0** (owner, 2026-11-26), amended by G1-D1 (owner-approved 2026-11-26: units, tick order, clamp-to-contact, §2 §5 §6). Contract changes require owner approval.
 
 ## 1. Platform and pinned versions
 
@@ -22,7 +22,8 @@ Status: **APPROVED v1.0** (owner, 2026-11-26). Contract changes require owner ap
 - Internal canvas is **640×360** (16:9). It scales by an exact integer to 1280×720 (2×), 1920×1080 (3×), 2560×1440 (4×) and 3840×2160 (6×). Steam Deck (1280×800) gets 2× with bars.
 - **Tile = 24 art px.** The playfield is 13×13 tiles = **312×312 px**. The remaining ~328 px of width hold side panels for the HUD: P1 left, P2 right, enemy reserve and stage info.
 - Destruction **cell = ¼ tile = 6 px**, so the field is 52×52 cells. Turn snapping uses the half-tile grid (12 px).
-- **Simulation units:** integer *subpixels*, with 1 art px = 16 subpixels. All positions and velocities are integers (exact in doubles), and speeds are given as subpixels/tick. This gives determinism without fixed-point libraries.
+- **Simulation units (amended by G1-D1, owner-approved 2026-11-26):** integer units **u**, independent of the art resolution. **1 tile = 256 u**, destruction cell (¼ tile) = 64 u, turn-snap grid (½ tile) = 128 u, playfield = 13 tiles = 3328 u. A tank is 256 × 256 u; a bullet is 32 × 32 u (UNV, tunable). All positions and velocities are integers (exact in doubles), and speeds are integer **u per tick** stored in `config/tuning.lua`; the simulation never uses floats. Docs may quote `tiles/s = u_per_tick × 60 / 256`; a design value is converted once, offline, with `u_per_tick = floor(tiles_s × 256 / 60 + 0.5)` and the integer is committed.
+- **Presentation mapping:** `px = floor(u × TILE_PX / 256)`, applied to an entity's top-left in `src/render` only. `TILE_PX` lives in `config/presentation.lua`, which `src/sim` must not require (enforced by `tools/check_boundaries.lua`). The same replay gives identical sim hashes with 24 px and 32 px presentation.
 - Scaling modes:
   - **Integer** (default): the largest integer scale that fits, letterboxed.
   - **Fit** (optional): integer pre-scale followed by a single linear upscale ("sharp bilinear").
@@ -75,16 +76,25 @@ This boundary is **enforced by a test** that statically scans `src/core` and `sr
 ## 5. Simulation model
 
 - `world` is a plain table: `tick`, `rng`, `cells` (a flat array of 52×52 terrain codes), `tanks`, `bullets`, `powerup`, `hq`, `players`, `stage`. Entity lists are **arrays iterated in order**; `pairs()` is never used in gameplay order.
-- `sim.step(world, input_frame)` is the only mutator. The resolution order per tick is fixed and documented: input → AI decisions → tank movement → bullet movement and collisions → bullet vs bullet → pickups → timers → spawns → win/loss checks.
+- `sim.step(world, input_frame)` is the only mutator. The resolution order per tick is fixed (amended by G1-D1): **input → AI decisions → tank movement → bullet spawn → bullet phase → removals → respawns → events**, with pickups, timers, enemy spawns and win/loss checks inserted after respawns by later milestones.
+  - **Tank movement:** P1, P2, then other tanks in creation order; each tank sees the positions already resolved this tick.
+  - **Bullet spawn:** for each tank in the same order, a fire request creates a bullet at the muzzle, which is resolved immediately against opposing bullets, tanks, then solids and bounds (§6).
+  - **Bullet phase:** `n = ceil(max active bullet speed / 64)` sub-steps (at least 1) for the whole world. Each bullet splits its speed into n integer parts, the remainder going to the first sub-steps. In every sub-step: (a) all bullets advance; (b) bullet vs bullet; (c) bullet vs tank; (d) bullet vs solids and bounds. Bullet vs bullet runs inside this loop, not as a later pass.
+  - **Removals:** consumed bullets leave the bullet list (order preserved); a hit player leaves the field and is scheduled to respawn on the next tick.
+  - **Respawns** (arena-only rule, G1-D2): a player scheduled for tick T+1 is placed at its spawn point in T+1's respawn phase, after T+1's bullet phase, if no tank overlaps the spawn box. Otherwise the respawn is deferred tick by tick and `respawn_blocked` is emitted once. Bullets never block a respawn; a bullet inside the spawn box resolves in the first bullet phase after placement, i.e. in tick T+2 (reconciled with this tick order).
 - **RNG:** a project-owned xorshift32 built on LuaJIT `bit`. It is seedable and serializable. `math.random`, `love.math.random` and `os.time` are banned in `sim`.
 - **Events:** `step` appends to `world.events`, which presentation drains each frame. Events are data only, such as `{type="hit_brick", x=, y=}`.
 - **State hash:** `sim.hash(world)` folds all authoritative fields into a 32-bit checksum. It is used by golden replays and desync checks.
 
 ## 6. Collision
 
-- Terrain is an integer cell grid (6 px cells). A tank AABB is tested against the cells it would overlap after the move. A blocked move is rejected per axis (tanks only move along one axis per tick anyway).
-- Bullets advance in sub-steps of ≤ 1 cell per sub-step, so they cannot tunnel.
-- Tank-vs-tank and bullet-vs-tank use integer AABB tests. Ties are resolved by entity order (P1, P2, enemies in spawn order).
+- Terrain is an integer cell grid (64 u cells, 52 × 52). All boxes are half-open integer AABBs (`[x, x + w)`); touching edges do not overlap.
+- **Clamp to contact** (amended by G1-D1): a tank moves along one axis per tick by the largest displacement ≤ its speed whose box overlaps no solid cell, bound or other present tank. A full rejection would leave visible gaps, because speeds do not divide the tile.
+- **Turn snapping and alignment:** a tank moves along an axis only while its perpendicular coordinate is a multiple of 128 u. Otherwise the move first snaps that coordinate to the nearest multiple of 128 (distance ≤ 64; an exact tie at 64 snaps toward the lower coordinate, up/left, UNV). The snap is a collision-checked move: if the snapped box would overlap a solid, bound or tank, the tank neither snaps nor moves this tick, but its facing still changes; the snap is attempted again on every later tick that moves it along that axis. Reversing along an axis never snaps, because that axis is already aligned. Invariant, asserted every tick in tests and replays: no tank overlaps a solid, a bound or another tank.
+- **Bullets** advance in sub-steps of ≤ 64 u (one cell), so they cannot tunnel through cells or tanks. Bullet vs tank and bullet vs solids/bounds test overlap after each sub-step advance.
+- **Bullet vs bullet** (opposing factions only; same-faction bullets pass through each other) uses an exact continuous test: the two boxes move linearly during the sub-step, and they cancel if their relative motion makes them overlap at some time t in [0, 1]. The test uses integer cross-multiplication, so head-on bullets cannot tunnel at any speed or phase, and perpendicular bullets that cross the same region at different times do not cancel. Pairs are checked in bullet order; a bullet consumed earlier in the sub-step is skipped.
+- **Simultaneous hits:** bullet vs bullet runs before bullet vs tank, so cancelled bullets hit nothing. Every bullet that overlaps the same tank in one sub-step is consumed, and the tank is hit once. The effective hit is the first hostile (opposing-faction) bullet in bullet order; only when every overlapping bullet is friendly is the first friendly bullet the effective hit, so a friendly bullet never suppresses a hostile hit (G1 review clarification 4). A hit player stops being a collision target after that sub-step. A bullet never hits its own tank.
+- Tank-vs-tank and bullet-vs-tank use integer AABB tests. Ties are resolved by entity order (P1, P2, enemies in spawn order; bullets in spawn order).
 - Destruction removes cells according to data-defined patterns (see GAME_DESIGN §4.3).
 
 ## 7. Input
@@ -93,7 +103,7 @@ This boundary is **enforced by a test** that statically scans `src/core` and `sr
 - Sources: keyboard and gamepads through the `love.joystick` gamepad API, with an SDL controller DB bundled at a pinned version. Stick input is converted to 4 directions with a dead zone and hysteresis.
 - Direction policy: **last pressed wins**, implemented with a per-player press-order stack.
 - Rebinding is stored in the save data (G8). Hot-plugging is supported. The default assignment is first pad → P1, second → P2.
-- `InputFrame`s are recorded to replay files (`seed`, `level`, `frames`) for tests and bug reports.
+- `InputFrame`s are recorded to replay files for tests and bug reports (`src/sim/replay.lua`, G1): `format`, `arena`, `seed`, `tuning_id`, `tuning_version`, `debug_tuned`, run-length-encoded frame codes (3 characters per player: direction, fire held, fire pressed) and checkpoint hashes every `checkpoint_every` ticks. The runner refuses a replay whose `tuning_id` differs from the active tuning and asserts the tick invariants on every tick. Golden replays live in `tests/fixtures/replays/` and are regenerated only by `tools/update_goldens.lua`, which refuses `debug_tuned` recordings. In the app, F8 saves an independent snapshot of the live recording (`replay.snapshot`, with a final checkpoint at the current tick); the live recording is never modified, so play continues and can be saved again. Files go to `replays/arena-<date-time>-t<tick>.lua` in the save directory, with `-2`, `-3`, … appended instead of overwriting an existing file; a failed write is reported as a failure (G1 review P2-1).
 
 ## 8. Rendering and shader architecture
 
@@ -145,6 +155,9 @@ The half-tile character grid is human-readable and diffable. Partial-brick autho
 | HiDPI regression (SIMULATED) | `tools/hidpi_sim.sh` runs the real app with LÖVE's implicit resource-DPI defaults forced to 1, 1.25, 1.5 and 2, in integer and fit modes. It requires SMOKE OK, plus canvas and window byte-identical to the DPI-1 reference. `--mutations` proves that removing each explicit DPI setting is detected by its own check. The window DPI itself is not simulated | sandbox (`make check`); labelled SIMULATED, never native |
 | Shell helper portability | `tests/tools/portable_sh_spec.lua` runs `tools/lib/portable.sh` (the PNG header reader and C-locale `printf` shared by `smoke.sh` and `hidpi_sim.sh`) under the system `bash` and `od`. On macOS that is `/bin/bash` 3.2 and BSD `od`. Byte-exact GNU and Apple `od` fixtures are in `tests/fixtures/od/` | sandbox + every native `make test` |
 | Pixel-density audit | `tools/check_dpi.lua`: every `newCanvas`/`newFont` in `src/` states its density (§2) | local `make check` |
+| Combat scenarios (G1) | busted: `sim.step` driven by InputFrames, asserting positions, events and the no-overlap invariant on every tick | local `make check` |
+| Golden replays (G1) | `tests/fixtures/replays/*.lua`: seed, arena, `tuning_id`, run-length-encoded InputFrames, checkpoint hashes; also replayed in a second LuaJIT process and with 24 px and 32 px presentation | local `make check` |
+| HiDPI label classifier | `tests/tools/hidpi_labels_spec.lua`: the pure-bash problem-code classifier of `hidpi_sim.sh` (`tools/lib/hidpi_labels.sh`), including the BSD grep regression | sandbox + every native `make test` |
 | Native macOS | owner, or a macOS GitLab runner later | see §13 |
 
 Golden fixtures are regenerated only by an explicit `tools/update_goldens.lua`, and every regeneration is called out in the PR.

@@ -1,0 +1,3 @@
+# Golden replay fixtures are written in canonical form by
+# tools/update_goldens.lua (src/core/serialize); never reformat them.
+tests/fixtures/replays/

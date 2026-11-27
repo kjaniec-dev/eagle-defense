@@ -1,6 +1,6 @@
 # Eagle Defense — Art Direction v1.0
 
-Status: **APPROVED as working direction** (owner, 2026-11-26). Final art direction is confirmed after the G3 visual slice.
+Status: **APPROVED as working direction** (owner, 2026-11-26). **Concept A (24 px) approved** as the presentation resolution and concept direction (owner, G1 acceptance, 2026-11-27). This is not final production art; final art direction is confirmed after the G3 visual slice.
 
 ## 1. Target look
 
@@ -20,7 +20,21 @@ A polished 16/32-bit-era top-down arcade look. Think a premium late-SNES / GBA /
 5. Forest is dense but has a subtle hint at its edges so that hidden tanks stay *fair*, similar to the classic.
 6. Every effect can be disabled: screen shake, bloom, CRT and flashes. There is a reduced-flash accessibility option.
 
-## 3. Technical art spec (hypothesis, validated in G3)
+## 3. Technical art spec (concept A approved 2026-11-27; sprite details validated in G3)
+
+**Owner decision, 2026-11-27 (G1 acceptance):** concept A from `docs/art/mockups/` is approved.
+
+| Item | Approved value |
+|---|---|
+| Internal canvas | 640×360, integer-scaled |
+| Tile size | 24 px |
+| Battlefield | 13 × 13 tiles = 312×312 px, at canvas position (164, 24) |
+
+The simulation stays resolution-independent. It works in units (1 tile = 256 u), and only `src/render` maps units to pixels, with `px = floor(u × 24 / 256)` (TECHNICAL_DESIGN §2; `config/presentation.lua`). Concept B (32 px, 768×432) is not pursued.
+
+The approval covers the resolution and the concept direction, not the mockup sprites as final production art.
+
+Sprite specification (validated in G3):
 
 | Item | Spec |
 |---|---|
@@ -33,6 +47,19 @@ A polished 16/32-bit-era top-down arcade look. Think a premium late-SNES / GBA /
 | Palette | Master palette of ≤ 48 colors (`assets/palette.gpl`); every environment uses a subset plus a tint |
 | Fonts | Original bitmap font, or an OFL-licensed pixel font (tracked in provenance) |
 | Rendering | Nearest filtering, no sub-pixel sprite positions, no rotation or scale on gameplay sprites |
+
+### 3a. G3 improvement requirements (from the G1 art review, preserved)
+
+The G1 independent art review found these strengths: brick, steel, water, palette and HUD. G3 must improve the following before the owner art-approval gate:
+
+1. Make tank silhouettes more distinctive.
+2. Improve the turret and track design.
+3. Make the original eagle emblem clearer, especially at 24 px.
+4. Make foliage less repetitive.
+5. Make animated effects more convincing.
+6. Make better use of HUD space.
+
+**No external art commission yet.** G3 first explores AI-authored improvements (Pipeline A). If appropriate, it then tries the bounded Blender MCP pipeline (G1-D5: optional, never a runtime dependency). Pipeline B (§7) is considered only if both fall short.
 
 ## 4. Environments
 
@@ -93,3 +120,5 @@ One static gameplay screenshot at 640×360, scaled 3×. It shows:
 - one explosion and the lighting pass
 
 It is delivered in two candidate densities (24 px vs 32 px tiles), and the owner picks one. After approval, the remaining environments are expanded.
+
+*Status (2026-11-27):* the static concepts were delivered in G1 (`docs/art/mockups/`), and the owner picked **A (24 px)** (§3). The G3 prototype is built at 24 px and must meet §3a.

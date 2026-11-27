@@ -16,10 +16,10 @@ The next milestone never starts automatically.
 
 | ID | Milestone | Key exit criteria | Native macOS acceptance |
 |---|---|---|---|
-| **G0** | Project foundation | The skeleton runs; fixed-step loop and scaling work; input abstraction; the test, lint and format toolchain; CI deferred (target: company GitLab), with `make check` run locally as the gate; documentation. | Yes (launch, scaling, input smoke) |
-| G1 | Core combat | Player movement, turn snapping, shooting, bullets, tank/bullet collisions, test arena, golden replay. *Proposed addition: a static art-direction spike screenshot (24 px vs 32 px), so art feedback arrives early.* | Yes (feel) |
-| G2 | Battlefield and destruction | Cell grid, partial brick, steel, water, forest, ice, level format + loader + validator | Optional |
-| G3 | Visual vertical slice | Final-quality Classic environment, tanks, HQ, effects, lighting and bloom prototype, pixel-perfect pipeline. **Owner art approval gate.** | Yes (visuals on a real display) |
+| G0 | Project foundation (merged) | The skeleton runs; fixed-step loop and scaling work; input abstraction; the test, lint and format toolchain; CI deferred (target: company GitLab), with `make check` run locally as the gate; documentation. | Yes (launch, scaling, input smoke) |
+| G1 | Core combat (accepted 2026-11-27, merged by PR #3) | Player movement, turn snapping, shooting, bullets, tank/bullet collisions, test arena, golden replays, plus the static art-direction spike (24 px vs 32 px). Plan: `docs/plans/G1_PLAN.md` (approved 2026-11-26). Tuning signed off (player 7, bullets 17/34). Art: **concept A (24 px, 640×360) approved**. | Yes (feel): **PASS** 2026-11-27, `docs/acceptance/G1-macos.md` (gamepad not tested, optional) |
+| G2 | Battlefield and destruction | Cell grid, partial brick, steel, water, forest, ice, level format + loader + validator. Plan: `docs/plans/G2_PLAN.md`, prepared after the G1 closure; no implementation before owner approval. | Optional |
+| G3 | Visual vertical slice | Final-quality Classic environment, tanks, HQ, effects, lighting and bloom prototype, pixel-perfect pipeline, at the approved 24 px / 640×360 and meeting the G1 art-review requirements (ART_DIRECTION §3a). **Owner art approval gate.** | Yes (visuals on a real display) |
 | G4 | Enemies and HQ defense | 4 archetypes, spawn rotation, AI, waves, HQ destruction, stage clear, game over | Optional |
 | G5 | Progression and power-ups | Stars, the 6 power-ups, lives, respawn, scoring, difficulty curve | Optional |
 | G6 | Local co-op | P2, independent bindings, friendly-fire stun, co-op lives and scoring, gamepads | **Yes (2 gamepads)** |

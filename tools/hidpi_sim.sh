@@ -9,7 +9,7 @@
 #     DPI 1, fit-mode prescale canvas (640k)x(360k) at DPI 1, exact pixel and
 #     letterbox counts, and linear filtering in fit mode;
 #   * show that the simulation was in effect (HIDPI_SIM probe line);
-#   * apply the requested window size and reach the expected marker positions;
+#   * apply the requested window size and reach the expected arena outcome;
 #   * produce canvas and window PNGs byte-identical to the scale-1 reference
 #     of the same mode. This catches any implicit-DPI resource drawn into the
 #     canvas (e.g. a font), even when the in-app checks pass.
@@ -27,6 +27,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=tools/lib/portable.sh
 . "$ROOT/tools/lib/portable.sh"
+# shellcheck source=tools/lib/hidpi_labels.sh
+. "$ROOT/tools/lib/hidpi_labels.sh"
+# shellcheck source=tools/lib/smoke_expect.sh
+. "$ROOT/tools/lib/smoke_expect.sh"
 OS="$(uname -s)"
 MUTATIONS=0
 if [[ "${1:-}" == "--mutations" ]]; then
@@ -63,18 +67,6 @@ run_with_timeout() {
   fi
 }
 
-# Maps in-app problem codes to the regression they reveal.
-labels_for_problems() {
-  local problems="$1"
-  [[ "$problems" == *canvas_pixels* || "$problems" == *canvas_dpi* ]] && echo "game-canvas-dpi"
-  [[ "$problems" == *prescale_pixels* || "$problems" == *prescale_dpi* ]] && echo "prescale-canvas-dpi"
-  [[ "$problems" == *blended:0* ]] && echo "fit-filtering"
-  local rest
-  rest="$(tr ';' '\n' <<<"$problems" | grep -v -E '^(none|.*canvas_pixels.*|canvas_dpi.*|prescale_pixels.*|prescale_dpi.*|blended:0.*|)$' || true)"
-  [[ -n "$rest" ]] && echo "other-check"
-  return 0
-}
-
 # run_case APP_ROOT MODE SIZE SCALE DIR -> prints "CASE ... PASS|FAIL [labels]"
 run_case() {
   local app="$1" mode="$2" size="$3" scale="$4" dir="$5"
@@ -106,7 +98,7 @@ run_case() {
     while IFS= read -r l; do [[ -n "$l" ]] && labels+=("$l"); done < <(labels_for_problems "$problems")
     [[ "$line" == "SMOKE OK "* ]] || [[ ${#labels[@]} -gt 0 ]] || labels+=("other-check")
     [[ "$line" == *" logical=$size "* ]] || labels+=("window-size-not-applied")
-    [[ "$line" == *"ticks=$TICKS "*"p1=5600,4992 p2=4256,3552 "* ]] || labels+=("tick-or-markers")
+    [[ "$line" == *"ticks=$TICKS "*" $SMOKE_EXPECT_120 "* ]] || labels+=("tick-or-markers")
   fi
   [[ $code -eq 0 ]] || [[ ${#labels[@]} -gt 0 ]] || labels+=("exit-$code")
   if [[ -s "$canvas" ]]; then
@@ -173,7 +165,7 @@ replace_once() {
 MUTATIONS_TABLE=(
   'game-canvas|src/render/screen.lua|newCanvas(self.w, self.h, { dpiscale = 1 })|newCanvas(self.w, self.h)|game-canvas-dpi|prescale-canvas-dpi'
   'prescale-canvas|src/render/screen.lua|newCanvas(self.w * k, self.h * k, { dpiscale = 1 })|newCanvas(self.w * k, self.h * k)|prescale-canvas-dpi|game-canvas-dpi'
-  'font|src/render/test_pattern.lua|newFont(10, "mono", 1)|newFont(10, "mono")|content-vs-reference|game-canvas-dpi prescale-canvas-dpi'
+  'font|src/render/arena_view.lua|newFont(10, "mono", 1)|newFont(10, "mono")|content-vs-reference|game-canvas-dpi prescale-canvas-dpi'
   'fit-filter|src/render/screen.lua|c:setFilter("linear", "linear")|c:setFilter("nearest", "nearest")|fit-filtering|game-canvas-dpi prescale-canvas-dpi'
 )
 

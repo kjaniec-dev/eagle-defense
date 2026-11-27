@@ -5,7 +5,14 @@
 local M = {}
 
 M.PURE_DIRS = { "src/core", "src/sim" }
-M.FORBIDDEN_REQUIRE = { "src%.render", "src%.audio", "src%.input", "src%.ui", "src%.app" }
+M.FORBIDDEN_REQUIRE = {
+  "src%.render",
+  "src%.audio",
+  "src%.input",
+  "src%.ui",
+  "src%.app",
+  "config%.presentation", -- art resolution (TILE_PX) is presentation-only (G1-D1)
+}
 
 -- Removes comments and string literals so they cannot cause false positives.
 function M.strip(source)
