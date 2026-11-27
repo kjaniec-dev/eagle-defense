@@ -10,7 +10,8 @@ Branch `g1/combat` from `main` `d3ccccf` (PR #2 merged). Plan: `docs/plans/G1_PL
 | BSD grep portability correction | sandbox + bash 3.2 emulation | **PASS** |
 | Visual spike (24 px vs 32 px concepts) | concept art, CPU-rendered, byte-deterministic | **DELIVERED**; owner choice pending |
 | Independent review corrections P2-1, P2-2 (`eb3123b`, `6f71f96`) | sandbox | **PASS** (see below) |
-| Native feel, determinism and art choice | native (owner) | **PENDING**: `docs/acceptance/G1-macos.md` |
+| Owner tuning approval (player 7, bullets 17/34), goldens regenerated | sandbox | **PASS** (see below) |
+| Native feel, determinism and art choice | native (owner) | Tuning **signed off** after owner playtesting; native `make check`, the remaining feel items and the art choice **PENDING**: `docs/acceptance/G1-macos.md` |
 
 ## Contract amendments (G1-D1, recorded before any code)
 TECHNICAL_DESIGN §2, §5, §6: 1 tile = 256 u; integer u/tick tuning; `px = floor(u × TILE_PX / 256)` in `src/render` only (`config/presentation.lua` is forbidden to `src/sim` by the boundary checker); tick order input → AI → movement → bullet spawn → sub-stepped bullet phase (advance, bullet vs bullet, bullet vs tank, bullet vs solids/bounds) → removals → respawns → events; clamp to contact; the alignment-based snap; the exact continuous bullet-vs-bullet test; simultaneous-hit rules; the reconciled respawn timing. GAME_DESIGN records the UNV assumptions (snap tie up/left, bullet size, point-blank shots, friendly bullets until G6, the arena §11).
@@ -20,7 +21,7 @@ TECHNICAL_DESIGN §2, §5, §6: 1 tile = 256 u; integer u/tick tuning; `px = flo
 - Shooting: one shot per press (no auto-repeat); limit 1 at levels 0–1 and 2 at levels 2–3; fast bullets from level 1; spawn centered on the front edge; muzzle obstruction resolved at once (opposing bullet → cancel, tank → hit, wall/bound → `bullet_hit_solid` without travel).
 - Bullet phase: `ceil(max speed / 64)` sub-steps, remainder first; bullet vs bullet uses the exact relative-motion test (clarification 3); every bullet overlapping a tank in a sub-step is consumed and the tank is hit once; bullets never hit their owner; same-faction bullets pass through.
 - Arena (`config/arenas/g1_arena.lua`, original): corridors, two 1-tile lanes, a block row with 1-tile gaps, two targets and a scheduled turret; arena-only respawn on the next tick, deferred while the spawn box is occupied (G1-D2, clarification 2).
-- Tuning (`config/tuning.lua`): integer values with provenance tags (all UNV/DOC; owner sign-off pending), tuning id = hash of the canonical form.
+- Tuning (`config/tuning.lua`): integer values with provenance tags, tuning id = hash of the canonical form. Owner sign-off 2026-11-27: `player_speed` 7, `bullet_speed_normal` 17, `bullet_speed_fast` 34 are `TUNED (owner, 2026-11-27)`; the other values stay UNV/DOC.
 
 ## Tests
 - Scenario specs (`tests/sim/`): movement, shooting, bullet collisions, respawn, data; the no-overlap invariant is asserted on every tick of every scenario.
@@ -47,7 +48,7 @@ The boot state enters the arena (the G0 debug sandbox is removed). PLACEHOLDER r
 ## Independent review corrections (review of `c188dbb`, 2026-11-27)
 - **P2-2, mixed-faction simultaneous hits** (`eb3123b`): when friendly and hostile bullets overlap one tank in the same sub-step, all are still consumed and the tank takes one effective hit, but that hit is now the first hostile bullet in bullet order; previously a friendly bullet listed first suppressed it. Recorded as clarification 4 (G1_PLAN §13, TECHNICAL_DESIGN §6, GAME_DESIGN). Regression tests: both insertion orders, several hostile bullets, friendly-only. No other collision priority changed; no G6 friendly-fire mechanics.
 - **P2-1, repeated F8 saves** (`6f71f96`): F8 saves `replay.snapshot` (an independent copy with a final checkpoint) instead of closing the live recording (`replay.finish` is removed). `src/app/replay_store.lua` writes `replays/arena-<date-time>-t<tick>.lua`, appends `-2`, `-3`, … instead of overwriting, and returns the failure reason for directory and write errors; the HUD shows `REPLAY SAVED` or `REPLAY SAVE FAILED`. Regression tests: save at 150, play to 200, save again (both verify, the live recording keeps grid checkpoints only); repeated saves at 120/120/180 and at tick 0; write and mkdir failures; earlier-session files untouched. Also exercised against the real `love.filesystem` under LÖVE 11.5 in the sandbox: two sessions gave `-t150`, `-2`, `-3`, `-4` with no overwrite, and a read-only directory returned `permission denied` instead of a path.
-- **Golden replays are unchanged** (`tools/update_goldens.lua --check`: all 4 up to date); none of them contains a mixed-faction hit in one sub-step. The smoke hash is unchanged (`0c5c7a9c`).
+- **Golden replays are unchanged** (`tools/update_goldens.lua --check`: all 4 up to date); none of them contains a mixed-faction hit in one sub-step. The smoke hash was unchanged by the corrections (`0c5c7a9c`; it changed afterwards with the owner tuning, see below).
 - Mutation check of the corrections (each run against the full suite):
 
 | Mutation | Caught by |
@@ -59,6 +60,23 @@ The boot state enters the arena (the G0 debug sandbox is removed). PLACEHOLDER r
 | write result ignored | `replay_store_spec` write failure |
 | directory result ignored | `replay_store_spec` mkdir failure |
 | existing file names reused | `replay_store_spec` earlier-session and give-up cases |
+
+## Owner tuning approval (2026-11-27)
+- `config/tuning.lua`: `player_speed` 6 → **7** u/tick (1.64 tiles/s); `bullet_speed_normal` **17** and `bullet_speed_fast` **34** unchanged in value. All three are tagged `TUNED (owner, 2026-11-27)`; every other value and tag is unchanged (pinned by a test in `tests/sim/data_spec.lua`). Tuning id `0d98355d` → `348b3a6c`. Recorded in GAME_DESIGN (Speeds, Bullet speed) and G1_PLAN §13.
+- **Golden replays regenerated** (all four), only through the approved tooling. A new tuning id requires new checkpoints (`luajit tools/update_goldens.lua`), but fixed tick counts would also move the players along different routes at speed 7. For example, `shooting_gallery` would no longer hit the target and `cancellation_duel` would no longer cancel anything. The input generator `tools/gen_g1_replay_inputs.lua` therefore now authors movement as distances converted to ticks at the committed speed, while waits and fire timings stay in ticks. At speed 6 it reproduces the previous fixtures byte for byte (verified). `movement_tour` gains an explicit 100-tick turret-clearance wait before P1 drives under the turret lane: at speed 6 the old inputs avoided the turret only by timing. Then `tools/update_goldens.lua` computed the checkpoints, and `--check` reports 4/4 up to date.
+- Route and behavior check, old (speed 6) against new (speed 7). The waypoints at segment ends agree within one speed step. Event counts:
+
+| Replay | Old (6) | New (7) |
+|---|---|---|
+| movement_tour | 12 shots, 11 solid hits, no tank hits | 11 shots, 11 solid hits, no tank hits |
+| shooting_gallery | 167 shots, 5 hostile + 13 friendly hits | 164 shots, 5 hostile + 11 friendly hits |
+| cancellation_duel | 32 shots, 7 cancels, 3 hits on the turret | 32 shots, 7 cancels, 3 hits on the turret |
+| stress_run (random input, unchanged) | 288 shots, 17 hostile + 11 friendly hits | 271 shots, 21 hostile + 8 friendly hits |
+
+- **Smoke expectation updated** in `tools/lib/smoke_expect.sh`: `p1=1408,2688 p2=1664,2652 hash=581f15d4` (was `p1=1384,2688 p2=1664,2712 hash=0c5c7a9c`); the 120-tick script itself is unchanged, and the unit test pins it against the pure simulation.
+- **Scenario tests now derive their expectations from the committed speed.** They no longer hard-code positions computed at 6 u/tick, so they prove the rules at 7. The rules and assertions are unchanged; setups that relied on one speed (wall and tank contact, blocked snap, respawn deferral) now place the tanks relative to the speed. To show that they test rules rather than one number, the movement, shooting, collision and respawn specs were also run with speeds 4, 5, 6, 8, 9, 13 and 16: all pass. Only the tests intentionally pinned to the committed values fail there (goldens, smoke expectation, tuning data).
+- The rule mutations were rerun at speed 7 against the rewritten tests, and all are still caught. They are: snap only on a facing change; ties snap to the higher coordinate; reject instead of clamp; respawn before the bullet phase.
+- Determinism guarantees are unchanged: no simulation code changed for the tuning. The goldens match in a second LuaJIT process and with 24 px and 32 px presentation.
 
 ## Art direction spike (G1-D4, G1-D5)
 - `docs/art/mockups/`: `A-native.png` (640×360), `B-native.png` (768×432), `A-1920x1080.png` (3×), `B-1920x1080-integer.png` (2×, letterboxed), `B-1920x1080-fit.png` (2.5× sharp-bilinear), `compare-1920x1080.png`, `palette.gpl` (48 colours) and `README.md` (trade-offs, provenance, recommendation). SHA-256 per file is listed in that README.
