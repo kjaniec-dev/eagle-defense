@@ -235,6 +235,8 @@ Clarification from the G1 independent review of PR #3 (2026-11-27; narrow, no G6
 
 Owner tuning approval (2026-11-27, after manual playtesting, included in PR #3): `player_speed = 7` (was 6), `bullet_speed_normal = 17`, `bullet_speed_fast = 34`, tagged `TUNED (owner, 2026-11-27)` in `config/tuning.lua`; every other tuning value unchanged. The golden replays were regenerated with the approved tooling and the smoke expectation updated.
 
+G1 closure (owner, 2026-11-27): final independent technical review PASS; native automated and manual acceptance PASS (gamepad not tested, optional); art concept A approved (640×360, 24 px tiles, 312×312 px battlefield; ART_DIRECTION §3). Merge of PR #3 authorized at `c82ff86`. Records: `docs/acceptance/G1-macos.md`, `docs/evidence/SUMMARY.md`.
+
 Also in G1 (owner, PR #2 acceptance): the BSD grep portability correction for `tools/hidpi_sim.sh` with a regression test, as a separate commit.
 
 Process: Fast Track workflow without intermediate approvals unless a material blocker or contract change occurs. CI stays disabled. No BMAD. G1 is delivered as a Draft PR and is merged only on explicit owner authorization; G2 is not started automatically.

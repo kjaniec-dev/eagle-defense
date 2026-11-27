@@ -2,6 +2,8 @@
 
 **Status: concept art.** These files are not shipped, not final and not part of the `.love`. They exist so the owner can choose the pixel density and the art direction. G3 produces the final asset set (animation, all directions and states, shaders).
 
+**Owner decision (2026-11-27, G1 acceptance): concept A approved.** It sets the presentation resolution (640 × 360, 24 px tiles, 312 × 312 battlefield) and the concept direction, not final production art. The G3 improvement requirements are in `docs/ART_DIRECTION.md` §3a. The files below stay unchanged as the record of the spike.
+
 Two static gameplay concepts show the same original mid-battle composition:
 
 | Concept | Tile | Internal canvas | Playfield (13 × 13) | At 1920 × 1080 |

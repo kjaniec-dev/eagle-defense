@@ -8,10 +8,12 @@ Branch `g1/combat` from `main` `d3ccccf` (PR #2 merged). Plan: `docs/plans/G1_PL
 | Real app in the arena, pixel-perfect smoke, same sim hash as the pure simulation | sandbox (Xvfb, Mesa llvmpipe) | **PASS** |
 | HiDPI harness + mutation proof | SIMULATED HiDPI | **PASS** 8/8, 4/4 detected |
 | BSD grep portability correction | sandbox + bash 3.2 emulation | **PASS** |
-| Visual spike (24 px vs 32 px concepts) | concept art, CPU-rendered, byte-deterministic | **DELIVERED**; owner choice pending |
+| Visual spike (24 px vs 32 px concepts) | concept art, CPU-rendered, byte-deterministic | **DELIVERED**; owner approved **concept A** (24 px, 640×360) on 2026-11-27 |
 | Independent review corrections P2-1, P2-2 (`eb3123b`, `6f71f96`) | sandbox | **PASS** (see below) |
 | Owner tuning approval (player 7, bullets 17/34), goldens regenerated | sandbox | **PASS** (see below) |
-| Native feel, determinism and art choice | native (owner) | Tuning **signed off** after owner playtesting; native `make check`, the remaining feel items and the art choice **PENDING**: `docs/acceptance/G1-macos.md` |
+| Final independent technical review of `c82ff86` | independent review | **PASS** |
+| Native `make check`, smoke, HiDPI harness | **native** (Apple M3 Pro, Retina DPI 2.00) | **PASS** (see "Native acceptance") |
+| Native feel, F8 saves, art choice | native (owner, manual) | **PASS**; gamepad NOT TESTED (optional); concept A approved |
 
 ## Contract amendments (G1-D1, recorded before any code)
 TECHNICAL_DESIGN §2, §5, §6: 1 tile = 256 u; integer u/tick tuning; `px = floor(u × TILE_PX / 256)` in `src/render` only (`config/presentation.lua` is forbidden to `src/sim` by the boundary checker); tick order input → AI → movement → bullet spawn → sub-stepped bullet phase (advance, bullet vs bullet, bullet vs tank, bullet vs solids/bounds) → removals → respawns → events; clamp to contact; the alignment-based snap; the exact continuous bullet-vs-bullet test; simultaneous-hit rules; the reconciled respawn timing. GAME_DESIGN records the UNV assumptions (snap tie up/left, bullet size, point-blank shots, friendly bullets until G6, the arena §11).
@@ -63,7 +65,10 @@ The boot state enters the arena (the G0 debug sandbox is removed). PLACEHOLDER r
 
 ## Owner tuning approval (2026-11-27)
 - `config/tuning.lua`: `player_speed` 6 → **7** u/tick (1.64 tiles/s); `bullet_speed_normal` **17** and `bullet_speed_fast` **34** unchanged in value. All three are tagged `TUNED (owner, 2026-11-27)`; every other value and tag is unchanged (pinned by a test in `tests/sim/data_spec.lua`). Tuning id `0d98355d` → `348b3a6c`. Recorded in GAME_DESIGN (Speeds, Bullet speed) and G1_PLAN §13.
-- **Golden replays regenerated** (all four), only through the approved tooling. A new tuning id requires new checkpoints (`luajit tools/update_goldens.lua`), but fixed tick counts would also move the players along different routes at speed 7. For example, `shooting_gallery` would no longer hit the target and `cancellation_duel` would no longer cancel anything. The input generator `tools/gen_g1_replay_inputs.lua` therefore now authors movement as distances converted to ticks at the committed speed, while waits and fire timings stay in ticks. At speed 6 it reproduces the previous fixtures byte for byte (verified). `movement_tour` gains an explicit 100-tick turret-clearance wait before P1 drives under the turret lane: at speed 6 the old inputs avoided the turret only by timing. Then `tools/update_goldens.lua` computed the checkpoints, and `--check` reports 4/4 up to date.
+- **Golden replays regenerated** (all four), only through the approved tooling. A new tuning id requires new checkpoints (`luajit tools/update_goldens.lua`), but fixed tick counts would also move the players along different routes at speed 7. For example, `shooting_gallery` would no longer hit the target and `cancellation_duel` would no longer cancel anything. The input generator `tools/gen_g1_replay_inputs.lua` therefore now authors movement as distances converted to ticks at the committed speed, while waits and fire timings stay in ticks. `movement_tour` also gains an explicit 100-tick turret-clearance wait before P1 drives under the turret lane, because at speed 6 the old inputs avoided the turret only by timing. **This wait is an additional input change, separate from the distance conversion.** Reproduction at speed 6, re-verified at the closure (committed generator run with `player_speed` set to 6 in a scratch worktree, frames compared with the `c188dbb` fixtures):
+  - `shooting_gallery`, `cancellation_duel` and `stress_run`: inputs identical.
+  - `movement_tour`: the old input with exactly one 100-tick idle block inserted at tick 550 (1545 vs 1445 ticks); otherwise identical.
+  - So only the distance conversion, without the wait, reproduces all four previous inputs. Then `tools/update_goldens.lua` computed the checkpoints, and `--check` reports 4/4 up to date.
 - Route and behavior check, old (speed 6) against new (speed 7). The waypoints at segment ends agree within one speed step. Event counts:
 
 | Replay | Old (6) | New (7) |
@@ -82,8 +87,59 @@ The boot state enters the arena (the G0 debug sandbox is removed). PLACEHOLDER r
 - `docs/art/mockups/`: `A-native.png` (640×360), `B-native.png` (768×432), `A-1920x1080.png` (3×), `B-1920x1080-integer.png` (2×, letterboxed), `B-1920x1080-fit.png` (2.5× sharp-bilinear), `compare-1920x1080.png`, `palette.gpl` (48 colours) and `README.md` (trade-offs, provenance, recommendation). SHA-256 per file is listed in that README.
 - Pipeline A (hand-authored, code-defined pixel art in `tools/mockup/`, rendered headless on the CPU by `make mockups`; two runs give byte-identical PNGs). Nothing is under `assets/`, `src/`, `config/` or `levels/`; the `.love` contains no `docs/` or `tools/` files (verified). The Blender MCP experiment was not used.
 - Authored by an Opus subagent and reviewed by the main agent on the rendered PNGs. Recommendation in the README: **A (24 px)** — exact integer scaling at 720p/1080p/1440p/4K and Steam Deck, lower asset cost; B's extra detail mostly pays off at 1440p/4K.
-- Honest assessment: brick, steel, water, HUD and lighting meet the concept bar; the tanks are readable but still somewhat generic, and the HQ eagle is busy at 24 px. Not yet viewed on a real display: owner check in `docs/acceptance/G1-macos.md` §3.
-- Independent art review (2026-11-27): both native-resolution PNGs accepted as static concept deliverables, not final production art; preliminary recommendation A (24 px), final choice pending owner visual acceptance. Strengths: brick, steel, water, palette, HUD. For G3: more distinctive tank silhouettes, better turret and track design, a clearer original eagle emblem, less repetitive foliage, more convincing animated effects, better use of HUD space. **No external art commission yet:** G3 first explores AI-authored improvements and, if appropriate, the bounded Blender MCP pipeline. No art changes in this correction round.
+- Honest assessment: brick, steel, water, HUD and lighting meet the concept bar; the tanks are readable but still somewhat generic, and the HQ eagle is busy at 24 px. The owner viewed the concepts and approved A (`docs/acceptance/G1-macos.md` §3).
+- Independent art review (2026-11-27): both native-resolution PNGs accepted as static concept deliverables, not final production art; preliminary recommendation A (24 px), final choice left to the owner's visual acceptance (the owner approved A on 2026-11-27; see below). Strengths: brick, steel, water, palette, HUD. For G3: more distinctive tank silhouettes, better turret and track design, a clearer original eagle emblem, less repetitive foliage, more convincing animated effects, better use of HUD space. **No external art commission yet:** G3 first explores AI-authored improvements and, if appropriate, the bounded Blender MCP pipeline. No art changes in this correction round.
+- **Owner decision (2026-11-27): concept A approved.**
+  - Internal canvas 640×360, 24 px tiles, battlefield 312×312 px; the simulation stays resolution-independent.
+  - This approves the presentation resolution and the concept direction, not final production art.
+  - The G3 improvement requirements above are preserved in ART_DIRECTION §3a.
+
+## Native acceptance (owner, 2026-11-27, HEAD `c82ff86`)
+Native host: Apple M3 Pro, macOS, Retina DPI 2.00, renderer `OpenGL / 4.1 Metal - 91.7 / Apple / Apple M3 Pro`. Checklist: `docs/acceptance/G1-macos.md`. **This evidence is native, recorded separately from the sandbox evidence above.**
+
+**Automated gate: PASS.**
+- Formatting: PASS.
+- Lint: 0 warnings / 0 errors in 98 files.
+- Shellcheck: PASS.
+- Busted: 283 / 0 / 0 / 0, golden replays included.
+- Boundaries: OK, 15 pure files.
+- Assets: OK.
+- DPI: OK, 30 files.
+- Smoke: 3/3 `SMOKE OK` at 800x600, 1024x640 and 1280x720. Each line is `ticks=120 state=arena p1=1408,2688 p2=1664,2652 hash=581f15d4`, with `mismatches=0`, `letterbox_bad=0` and `problems=none`.
+- HiDPI harness: 8/8 PASS on a real DPI-2 window (SIMULATED resource DPI; integer window overridden to 1280x720).
+- The BSD grep warning from PR #2 no longer occurs.
+- Exit code: the log ends with `make check exit=` and no value. No numeric exit code is recorded, and none is claimed; the terminal output reaches the successful final gate.
+
+**Cross-platform determinism.** The native sim hash `581f15d4` and positions equal the sandbox values, and the golden replays match natively. In the 640×360 smoke canvas, the decoded pixel-index data is identical to the sandbox canvas. 5 of the 23 palette entries differ by 1/255 in one or two channels (Metal vs llvmpipe float-to-8-bit rounding). This is not a gate: each platform compares its window against its own canvas.
+
+**Manual: PASS.**
+- Instant start and stop.
+- Turning and narrow corridor entry.
+- Normal and fast bullets.
+- Two active bullets at level 2.
+- Cancellation.
+- Smoothness.
+- Respawn after a hit.
+- Repeated F8 saves: five files in one session, at ticks 2159, 2269, 2346, 2360 and 2373.
+
+Gamepad: NOT TESTED (optional, non-blocking).
+
+**Preserved artifacts** (outside Git and `build/`, copied unchanged before any further sandbox run): `native-evidence/g1-final-native-acceptance-c82ff86-2026-11-27/`.
+
+| Path | Content |
+|---|---|
+| `run-a-make-check-2213/` | full `make check` log, smoke, harness |
+| `run-b-smoke-hidpi-2316/` | second smoke + harness run; no console log on disk |
+| `aborted-2212/` | an empty log |
+
+The folder's `README.txt` records the provenance. Its `SHA256SUMS` has SHA-256 `74133cbf9bf61b019a731a6cb504209063fdfeecaadd057b0c779d754ce7aa99`. Key file hashes:
+
+| File | SHA-256 |
+|---|---|
+| `native-check.log` | `cf8c0f3d65437efbf93d757834dd791dae14e0071f6cd2e3b31627daaecdcd6d` |
+| smoke canvas (identical across all six smoke PNGs of both runs) | `bdcb578c3b7386c86a412f79ab8fcb817733b68a69d0a93cc244a3676a3ce4c3` |
+
+**Closure.** The final independent technical review is PASS, and the owner authorized merging PR #3 at `c82ff864c96b4ab8497fc5ec307b023b2b14e58a`. The closure commit on top of it changes documentation only.
 
 ## Not changed
 No new runtime dependencies. CI stays disabled. No BMAD. No G2 work (terrain types, destruction). The pixel-density invariant and the toolchain layout are unchanged.
