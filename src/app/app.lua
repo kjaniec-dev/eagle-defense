@@ -10,6 +10,7 @@ local overlay = require("src.render.debug_overlay")
 local args_mod = require("src.app.args")
 local upscale_check = require("src.app.upscale_check")
 local fit_check = require("src.app.fit_check")
+local replay_store = require("src.app.replay_store")
 local bindings = require("config.bindings")
 
 local App = {}
@@ -43,14 +44,10 @@ function App.load(argv)
   ctx.quit = function()
     App.exit_code = 0
   end
-  -- Writes a replay recording into the save directory; returns its path.
+  -- Writes a replay recording into the save directory under a new file
+  -- name; returns its path, or nil and an error message.
   ctx.save_replay = function(rec)
-    love.filesystem.createDirectory("replays")
-    App.saved = (App.saved or 0) + 1
-    local last = rec.checkpoints[#rec.checkpoints]
-    local name = ("replays/arena-%d-%d.lua"):format(last and last[1] or 0, App.saved)
-    love.filesystem.write(name, require("src.core.serialize").encode(rec))
-    return love.filesystem.getSaveDirectory() .. "/" .. name
+    return replay_store.save(love.filesystem, rec, os.date("%Y%m%d-%H%M%S"))
   end
   App.machine = statemachine.new({
     states = {

@@ -27,7 +27,7 @@ Controls in the G1 arena:
 | Gamepads | first pad → P1, second pad → P2 (D-pad / left stick, A or B fires) |
 | Restart the arena | F2 |
 | Debug tuning editor (in-memory copy) | F5, then `[` `]` select, `-` `=` adjust, Backspace reset |
-| Save the input recording (replay) | F8 (written to the LÖVE save directory, `replays/`) |
+| Save the input recording (replay) | F8 (a new file in the LÖVE save directory, `replays/`; never overwrites; the HUD shows `REPLAY SAVED` or `REPLAY SAVE FAILED`) |
 | Fullscreen | F11 or Alt+Enter |
 | Debug overlay | F3 |
 | Scale mode (integer / fit) | F4 |

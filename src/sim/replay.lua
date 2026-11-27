@@ -231,13 +231,23 @@ function M.record(rec, frame, w)
   end
 end
 
--- Closes a recording: adds the final checkpoint if it is not on the grid.
-function M.finish(rec, w)
-  local last = rec.checkpoints[#rec.checkpoints]
-  if w.tick > 0 and (not last or last[1] ~= w.tick) then
-    rec.checkpoints[#rec.checkpoints + 1] = { w.tick, sim.hash(w) }
+-- An independent, complete copy of a recording at world w's current tick:
+-- the frames and checkpoints so far, plus a final checkpoint when the tick
+-- is not on the checkpoint grid. The live recording is never modified, so
+-- play can continue and be saved again (G1 review P2-1).
+function M.snapshot(rec, w)
+  local copy = M.new_recording(rec)
+  for i, r in ipairs(rec.frames) do
+    copy.frames[i] = { r[1], r[2] }
   end
-  return rec
+  for i, cp in ipairs(rec.checkpoints) do
+    copy.checkpoints[i] = { cp[1], cp[2] }
+  end
+  local last = copy.checkpoints[#copy.checkpoints]
+  if w.tick > 0 and (not last or last[1] ~= w.tick) then
+    copy.checkpoints[#copy.checkpoints + 1] = { w.tick, sim.hash(w) }
+  end
+  return copy
 end
 
 return M

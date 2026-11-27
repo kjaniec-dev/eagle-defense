@@ -9,6 +9,22 @@ local tuning = require("src.sim.tuning")
 local replay = require("src.sim.replay")
 local sim = require("src.sim.sim")
 
+local function ticks_of(checkpoints)
+  local out = {}
+  for i, cp in ipairs(checkpoints) do
+    out[i] = cp[1]
+  end
+  return out
+end
+
+local function frame_count(rec)
+  local n = 0
+  for _, r in ipairs(rec.frames) do
+    n = n + r[2]
+  end
+  return n
+end
+
 local function new_state()
   local ctx = { quit_called = false, saved = {} }
   ctx.quit = function()
@@ -51,8 +67,83 @@ describe("app.states.arena", function()
   it("saves an empty recording at tick 0 without failing", function()
     local st, ctx = new_state()
     st:keypressed("f8")
-    assert.are.same({}, ctx.saved[1].checkpoints)
-    assert.are.same({}, ctx.saved[1].frames)
+    st:keypressed("f8")
+    for i = 1, 2 do
+      assert.are.same({}, ctx.saved[i].checkpoints)
+      assert.are.same({}, ctx.saved[i].frames)
+      assert.is_true(replay.verify(ctx.saved[i], tuning.load()))
+    end
+  end)
+
+  -- Review P2-1: F8 must snapshot the recording, not close the live one.
+  it("saves at tick 150, plays on to 200 and saves again: both recordings verify", function()
+    local st, ctx = new_state()
+    local function play_to(n)
+      while st.world.tick < n do
+        st:tick(args.smoke_frame(st.world.tick + 1))
+      end
+    end
+    play_to(150)
+    st:keypressed("f8")
+    play_to(200)
+    st:keypressed("f8")
+    local active = tuning.load()
+    local first, second = ctx.saved[1], ctx.saved[2]
+    assert.are_not.equal(first, second)
+    assert.are.same({ 60, 120, 150 }, ticks_of(first.checkpoints))
+    assert.are.same({ 60, 120, 180, 200 }, ticks_of(second.checkpoints))
+    assert.is_true(replay.verify(first, active))
+    assert.is_true(replay.verify(second, active))
+    -- the live recording only has checkpoints on the grid
+    assert.are.same({ 60, 120, 180 }, ticks_of(st.recording.checkpoints))
+    -- the first snapshot did not change when play continued
+    assert.are.equal(150, frame_count(first))
+    assert.are.equal(200, frame_count(second))
+  end)
+
+  it("repeated saves at checkpoint boundaries give identical, verifying recordings", function()
+    local st, ctx = new_state()
+    for tick = 1, 120 do
+      st:tick(args.smoke_frame(tick))
+    end
+    st:keypressed("f8")
+    st:keypressed("f8")
+    for tick = 121, 180 do
+      st:tick(args.smoke_frame(tick))
+    end
+    st:keypressed("f8")
+    local active = tuning.load()
+    assert.are.same(ctx.saved[1], ctx.saved[2])
+    assert.are.same({ 60, 120 }, ticks_of(ctx.saved[1].checkpoints))
+    assert.are.same({ 60, 120, 180 }, ticks_of(ctx.saved[3].checkpoints))
+    for i = 1, 3 do
+      assert.is_true(replay.verify(ctx.saved[i], active))
+    end
+    assert.are.same({ 60, 120, 180 }, ticks_of(st.recording.checkpoints))
+  end)
+
+  it("reports a failed write as a failure, never as a saved recording", function()
+    local st, ctx = new_state()
+    ctx.save_replay = function()
+      return nil, "disk full"
+    end
+    local printed = {}
+    local real_print = print
+    _G.print = function(s)
+      printed[#printed + 1] = s
+    end
+    st:tick(args.smoke_frame(1))
+    local ok, err = pcall(st.keypressed, st, "f8")
+    _G.print = real_print
+    assert(ok, err)
+    assert.is_false(st.save_status.ok)
+    assert.are.equal("REPLAY SAVE FAILED", st.save_status.text)
+    assert.are.equal("arena: recording NOT saved: disk full", printed[1])
+    for _ = 1, arena_state.SAVE_STATUS_TTL do
+      st:tick(args.smoke_frame(1))
+    end
+    assert.is_nil(st.save_status) -- the HUD message expires
+    assert.are.equal(1, #st.recording.frames) -- the live recording keeps going
   end)
 
   it("quits on pause (Esc) like the G0 scene", function()

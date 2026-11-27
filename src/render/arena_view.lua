@@ -163,6 +163,10 @@ function M.draw(st)
     color(COLORS.title)
     lg.print("TUNING MODIFIED", 8, 112)
   end
+  if st.save_status then
+    color(st.save_status.ok and COLORS.hot or COLORS.title)
+    lg.print(st.save_status.text, 8, 124)
+  end
 
   local rx = fx0 + fs + 8
   if st.edit.open then

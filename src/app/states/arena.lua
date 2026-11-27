@@ -15,6 +15,8 @@ local M = {}
 
 M.ARENA = "g1_arena"
 M.SEED = 1
+-- Ticks the F8 save result stays on the HUD.
+M.SAVE_STATUS_TTL = 180
 
 -- Presentation effects driven by sim events (never feed back into the sim).
 local FX_TTL = {
@@ -92,6 +94,13 @@ function M.new(ctx)
       end
     end
     self.fx = M.update_fx(self.fx, events)
+    local ss = self.save_status
+    if ss then
+      ss.ttl = ss.ttl - 1
+      if ss.ttl <= 0 then
+        self.save_status = nil
+      end
+    end
   end
 
   function state:keypressed(key)
@@ -102,9 +111,15 @@ function M.new(ctx)
     elseif key == "f5" then
       edit:toggle()
     elseif key == "f8" then
-      local rec = replay.finish(self.recording, self.world)
-      local path = ctx.save_replay(rec)
-      print("arena: recording saved to " .. tostring(path))
+      -- Save an independent snapshot; the live recording continues as is.
+      local path, err = ctx.save_replay(replay.snapshot(self.recording, self.world))
+      if path then
+        self.save_status = { ok = true, text = "REPLAY SAVED", ttl = M.SAVE_STATUS_TTL }
+        print("arena: recording saved to " .. path)
+      else
+        self.save_status = { ok = false, text = "REPLAY SAVE FAILED", ttl = M.SAVE_STATUS_TTL }
+        print("arena: recording NOT saved: " .. tostring(err))
+      end
     elseif edit.open then
       if key == "[" then
         edit:select(-1)
@@ -130,6 +145,7 @@ function M.new(ctx)
       counts = self.counts,
       edit = self.edit,
       modified = self.edit:modified(),
+      save_status = self.save_status,
     })
   end
 

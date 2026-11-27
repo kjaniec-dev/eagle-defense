@@ -46,7 +46,7 @@ The arena opens directly. P1: WASD + Space (gold). P2: arrows + Right Ctrl (teal
 ### Tuning sign-off
 F5 opens the debug editor (an in-memory copy; the HUD shows `TUNING MODIFIED`). `[` / `]` select, `-` / `=` adjust (each change restarts the arena), Backspace restores the committed values. Nothing is written to disk. Report the values you want; they are then committed to `config/tuning.lua` with the tag `TUNED (owner, <date>)`, and the golden replays are regenerated with `tools/update_goldens.lua` (called out in the PR). Subjective tuning is never tagged MEASURED.
 
-Optional for bug reports: F8 saves the current input recording to `~/Library/Application Support/LOVE/eagle-defense/replays/`.
+Optional for bug reports: F8 saves the current input recording to `~/Library/Application Support/LOVE/eagle-defense/replays/` as `arena-<date-time>-t<tick>.lua` (a new file each time; the HUD shows `REPLAY SAVED`, or `REPLAY SAVE FAILED` with the reason in the terminal). Pressing F8 again later in the same run saves a second, longer recording; both replay correctly.
 
 ## 3. Art direction (decision G1-D4)
 
