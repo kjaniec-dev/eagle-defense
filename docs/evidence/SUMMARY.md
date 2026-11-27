@@ -132,7 +132,7 @@ Gamepad: NOT TESTED (optional, non-blocking).
 | `run-b-smoke-hidpi-2316/` | second smoke + harness run; no console log on disk |
 | `aborted-2212/` | an empty log |
 
-The folder's `README.txt` records the provenance. Its `SHA256SUMS` has SHA-256 `74133cbf9bf61b019a731a6cb504209063fdfeecaadd057b0c779d754ce7aa99`. Key file hashes:
+The folder's `README.txt` records the provenance; every file hash is listed in `docs/evidence/G1-native-macos.md`. Its `SHA256SUMS` has SHA-256 `74133cbf9bf61b019a731a6cb504209063fdfeecaadd057b0c779d754ce7aa99`. Key file hashes:
 
 | File | SHA-256 |
 |---|---|
