@@ -141,7 +141,7 @@ These renders are sandbox evidence only: CPU-rendered on Linux and viewed as PNG
 - **Forest and explosion.** Both are rule-based composites. They work for a static frame, but G3 needs hand-animated explosion frames and a less regular canopy.
 - **Ice.** It is clean but a little "glass pane".
 
-**Pipeline B.** Pipeline A is strong enough for tiles, UI and effects. For the hero sprites (4 tank designs × 4 directions × 2–3 track frames, plus the HQ intact and destroyed), I recommend that the owner seriously considers commissioning a human pixel artist at G3. Use these mockups as the style and palette brief, and decide after the G3 slice as planned.
+**Pipeline B.** Pipeline A is strong enough for tiles, UI and effects. For the hero sprites (4 tank designs × 4 directions × 2–3 track frames, plus the HQ intact and destroyed), I recommend that the owner seriously considers commissioning a human pixel artist at G3. Use these mockups as the style and palette brief, and decide after the G3 slice as planned. *Independent review, 2026-11-27: do not commission external artwork yet; G3 first explores AI-authored improvements (tank silhouettes, turret and tracks, the eagle emblem, foliage variety, animated effects, HUD space) and, if appropriate, the bounded Blender MCP pipeline.*
 
 ## Recommendation
 

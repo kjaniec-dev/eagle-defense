@@ -9,6 +9,7 @@ Branch `g1/combat` from `main` `d3ccccf` (PR #2 merged). Plan: `docs/plans/G1_PL
 | HiDPI harness + mutation proof | SIMULATED HiDPI | **PASS** 8/8, 4/4 detected |
 | BSD grep portability correction | sandbox + bash 3.2 emulation | **PASS** |
 | Visual spike (24 px vs 32 px concepts) | concept art, CPU-rendered, byte-deterministic | **DELIVERED**; owner choice pending |
+| Independent review corrections P2-1, P2-2 (`eb3123b`, `6f71f96`) | sandbox | **PASS** (see below) |
 | Native feel, determinism and art choice | native (owner) | **PENDING**: `docs/acceptance/G1-macos.md` |
 
 ## Contract amendments (G1-D1, recorded before any code)
@@ -37,15 +38,34 @@ TECHNICAL_DESIGN §2, §5, §6: 1 tile = 256 u; integer u/tick tuning; `px = flo
 | one `tank_hit` per bullet | two-bullets-one-tank test |
 | no sub-steps | tunnelling test, two-bullets test |
 | respawn before the bullet phase | spawn-box bullet regression |
+| first overlapping bullet wins regardless of faction (P2-2) | hostile + friendly (friendly first), several hostile bullets |
+| last hostile bullet wins (P2-2) | several hostile bullets |
 
 ## App
 The boot state enters the arena (the G0 debug sandbox is removed). PLACEHOLDER rendering through the pure `render/layout`; F5 debug tuning editor (in-memory copy, restart on change, `TUNING MODIFIED`, recordings tagged `debug_tuned`); F2 restart; F8 saves the recording. Smoke drives the arena with a scripted 120-tick input; the SMOKE line reports positions and the sim hash, pinned in `tools/lib/smoke_expect.sh` against the pure simulation.
+
+## Independent review corrections (review of `c188dbb`, 2026-11-27)
+- **P2-2, mixed-faction simultaneous hits** (`eb3123b`): when friendly and hostile bullets overlap one tank in the same sub-step, all are still consumed and the tank takes one effective hit, but that hit is now the first hostile bullet in bullet order; previously a friendly bullet listed first suppressed it. Recorded as clarification 4 (G1_PLAN §13, TECHNICAL_DESIGN §6, GAME_DESIGN). Regression tests: both insertion orders, several hostile bullets, friendly-only. No other collision priority changed; no G6 friendly-fire mechanics.
+- **P2-1, repeated F8 saves** (`6f71f96`): F8 saves `replay.snapshot` (an independent copy with a final checkpoint) instead of closing the live recording (`replay.finish` is removed). `src/app/replay_store.lua` writes `replays/arena-<date-time>-t<tick>.lua`, appends `-2`, `-3`, … instead of overwriting, and returns the failure reason for directory and write errors; the HUD shows `REPLAY SAVED` or `REPLAY SAVE FAILED`. Regression tests: save at 150, play to 200, save again (both verify, the live recording keeps grid checkpoints only); repeated saves at 120/120/180 and at tick 0; write and mkdir failures; earlier-session files untouched. Also exercised against the real `love.filesystem` under LÖVE 11.5 in the sandbox: two sessions gave `-t150`, `-2`, `-3`, `-4` with no overwrite, and a read-only directory returned `permission denied` instead of a path.
+- **Golden replays are unchanged** (`tools/update_goldens.lua --check`: all 4 up to date); none of them contains a mixed-faction hit in one sub-step. The smoke hash is unchanged (`0c5c7a9c`).
+- Mutation check of the corrections (each run against the full suite):
+
+| Mutation | Caught by |
+|---|---|
+| first overlapping bullet wins (the pre-fix rule) | `collision_spec` friendly-first case, several-hostile case |
+| a later hostile bullet replaces an earlier one | several-hostile case |
+| F8 closes the live recording (the pre-fix behavior) | `arena_spec` save 150 → 200, checkpoint-boundary case |
+| success reported regardless of the save result | `arena_spec` failed-write case |
+| write result ignored | `replay_store_spec` write failure |
+| directory result ignored | `replay_store_spec` mkdir failure |
+| existing file names reused | `replay_store_spec` earlier-session and give-up cases |
 
 ## Art direction spike (G1-D4, G1-D5)
 - `docs/art/mockups/`: `A-native.png` (640×360), `B-native.png` (768×432), `A-1920x1080.png` (3×), `B-1920x1080-integer.png` (2×, letterboxed), `B-1920x1080-fit.png` (2.5× sharp-bilinear), `compare-1920x1080.png`, `palette.gpl` (48 colours) and `README.md` (trade-offs, provenance, recommendation). SHA-256 per file is listed in that README.
 - Pipeline A (hand-authored, code-defined pixel art in `tools/mockup/`, rendered headless on the CPU by `make mockups`; two runs give byte-identical PNGs). Nothing is under `assets/`, `src/`, `config/` or `levels/`; the `.love` contains no `docs/` or `tools/` files (verified). The Blender MCP experiment was not used.
 - Authored by an Opus subagent and reviewed by the main agent on the rendered PNGs. Recommendation in the README: **A (24 px)** — exact integer scaling at 720p/1080p/1440p/4K and Steam Deck, lower asset cost; B's extra detail mostly pays off at 1440p/4K.
-- Honest assessment: brick, steel, water, HUD and lighting meet the concept bar; the tanks are readable but still somewhat generic, and the HQ eagle is busy at 24 px. Commissioning a pixel artist for the hero sprites (ART_DIRECTION §7, Pipeline B) should be considered at G3. Not yet viewed on a real display: owner check in `docs/acceptance/G1-macos.md` §3.
+- Honest assessment: brick, steel, water, HUD and lighting meet the concept bar; the tanks are readable but still somewhat generic, and the HQ eagle is busy at 24 px. Not yet viewed on a real display: owner check in `docs/acceptance/G1-macos.md` §3.
+- Independent art review (2026-11-27): both native-resolution PNGs accepted as static concept deliverables, not final production art; preliminary recommendation A (24 px), final choice pending owner visual acceptance. Strengths: brick, steel, water, palette, HUD. For G3: more distinctive tank silhouettes, better turret and track design, a clearer original eagle emblem, less repetitive foliage, more convincing animated effects, better use of HUD space. **No external art commission yet:** G3 first explores AI-authored improvements and, if appropriate, the bounded Blender MCP pipeline. No art changes in this correction round.
 
 ## Not changed
 No new runtime dependencies. CI stays disabled. No BMAD. No G2 work (terrain types, destruction). The pixel-density invariant and the toolchain layout are unchanged.
