@@ -6,4 +6,4 @@
 # this, so the real app must agree. A tuning or arena change updates it
 # together with the golden replays.
 # shellcheck disable=SC2034 # used by the sourcing scripts
-SMOKE_EXPECT_120="p1=1384,2688 p2=1664,2712 hash=0c5c7a9c"
+SMOKE_EXPECT_120="p1=1408,2688 p2=1664,2652 hash=581f15d4"

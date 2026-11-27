@@ -5,6 +5,7 @@ local H = require("tests.sim.helpers")
 local sim = require("src.sim.sim")
 
 local F = H.frame
+local S = H.tuning().player_speed -- committed player speed
 
 local function by_tick(events, kind)
   local out = {}
@@ -31,8 +32,8 @@ describe("sim respawn (arena only)", function()
     local w = world()
     local p1 = w.tanks[1]
     H.run(w, 50, F("down"))
-    assert.are.same({ 512, 812 }, { p1.x, p1.y })
-    shoot_from_left(w, 512, 900)
+    assert.are.same({ 512, 512 + 50 * S }, { p1.x, p1.y })
+    shoot_from_left(w, 512, p1.y + 88)
     local ev = H.run(w, 1, F(nil))
     assert.are.same({ 51 }, by_tick(ev, "tank_hit"))
     assert.is_false(p1.present)
@@ -47,18 +48,24 @@ describe("sim respawn (arena only)", function()
     local w = world()
     local p1, p2 = w.tanks[1], w.tanks[2]
     H.run(w, 100, F("down"))
-    H.run(w, 50, F(nil, "left"))
-    assert.are.equal(724, p2.x) -- covers part of P1's spawn box (x 512..768)
-    shoot_from_left(w, 512, 1200)
+    -- P2 drives left until it covers part of P1's spawn box (x 512..768)
+    local n = math.floor((1024 - 700) / S)
+    H.run(w, n, F(nil, "left"))
+    assert.are.equal(1024 - n * S, p2.x)
+    assert.is_true(p2.x > 512 and p2.x < 768)
+    shoot_from_left(w, 512, p1.y + 100)
     local ev = H.run(w, 1, F(nil))
     assert.are.equal(1, #H.of_type(ev, "tank_hit"))
+    local hit_tick = 100 + n + 1
     ev = H.run(w, 30, F(nil))
-    assert.are.same({ 152 }, by_tick(ev, "respawn_blocked"))
+    assert.are.same({ hit_tick + 1 }, by_tick(ev, "respawn_blocked"))
     assert.are.equal(0, #H.of_type(ev, "tank_respawn"))
     assert.is_false(p1.present)
-    -- P2 backs off: 724 -> 772 after 8 ticks; P1 is placed in that tick
-    ev = H.run(w, 10, F(nil, "right"))
-    assert.are.same({ 189 }, by_tick(ev, "tank_respawn"))
+    -- P2 backs off until x >= 768; P1 is placed in that same tick (after
+    -- the movement phase)
+    local back = math.ceil((768 - p2.x) / S)
+    ev = H.run(w, back + 5, F(nil, "right"))
+    assert.are.same({ hit_tick + 30 + back }, by_tick(ev, "tank_respawn"))
     assert.are.equal(0, #H.of_type(ev, "respawn_blocked"))
     assert.is_true(p1.present)
     assert.is_true(p2.x >= 768)

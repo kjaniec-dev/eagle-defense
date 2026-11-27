@@ -23,13 +23,30 @@ describe("simulation units", function()
 
   it("converts the committed tuning to readable tiles/s", function()
     local v = tuning.load().values
-    assert.are.equal(6 * 60 / 256, units.tiles_per_second(v.player_speed))
+    assert.are.equal(7 * 60 / 256, units.tiles_per_second(v.player_speed)) -- 1.64 tiles/s
     -- design value -> u/tick, round half up (TECHNICAL_DESIGN §2)
     local function convert(tiles_s)
       return math.floor(tiles_s * 256 / 60 + 0.5)
     end
     assert.are.same({ 6, 17, 34 }, { convert(1.40), convert(4), convert(8) })
-    assert.are.same({ 6, 17, 34 }, { v.player_speed, v.bullet_speed_normal, v.bullet_speed_fast })
+  end)
+
+  it("commits the owner-approved speeds tagged TUNED (owner, 2026-11-27)", function()
+    local cfg = require("config.tuning")
+    local approved = { player_speed = 7, bullet_speed_normal = 17, bullet_speed_fast = 34 }
+    for key, value in pairs(approved) do
+      assert.are.same(
+        { value, "TUNED (owner, 2026-11-27)" },
+        { cfg.entries[key][1], cfg.entries[key][2] },
+        key
+      )
+    end
+    -- everything else keeps its earlier value and tag
+    assert.are.same(
+      { 17, "UNV" },
+      { cfg.entries.turret_bullet_speed[1], cfg.entries.turret_bullet_speed[2] }
+    )
+    assert.are.same({ 32, "UNV" }, { cfg.entries.bullet_size[1], cfg.entries.bullet_size[2] })
   end)
 end)
 
@@ -60,7 +77,7 @@ describe("tuning", function()
     local v = tuning.load().values
     local c = tuning.copy(v)
     c.player_speed = 9
-    assert.are.equal(6, tuning.load().values.player_speed)
+    assert.are.equal(cfg.entries.player_speed[1], tuning.load().values.player_speed)
   end)
 
   it("rejects bad values, unknown keys and missing provenance", function()
@@ -86,7 +103,15 @@ describe("tuning", function()
     end
     entries.player_speed[2] = "TUNED (owner, 2026-12-01)"
     entries.bullet_speed_fast[2] = "MEASURED (frame-stepped footage, owner recording, 2026-12-01)"
-    assert.are.equal(6, tuning.from_config({ version = 1, entries = entries }).player_speed)
+    entries.player_speed[2] = "TUNED (owner)" -- date missing
+    assert.has_error(function()
+      tuning.from_config({ version = 1, entries = entries })
+    end)
+    entries.player_speed[2] = "TUNED (owner, 2026-12-01)"
+    assert.are.equal(
+      cfg.entries.player_speed[1],
+      tuning.from_config({ version = 1, entries = entries }).player_speed
+    )
   end)
 end)
 

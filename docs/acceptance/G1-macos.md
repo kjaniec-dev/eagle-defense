@@ -26,7 +26,7 @@ grep -E '^SMOKE (OK|FAIL)' build/smoke*.log
 grep -E '^(CASE|hidpi-sim:)' build/native-check.log
 ```
 
-Expected: `make check exit=0`; 3 × `SMOKE OK … state=arena p1=1384,2688 p2=1664,2712 hash=0c5c7a9c … problems=none` (the same sim hash as in the sandbox, which proves cross-platform determinism of the 120-tick script); `hidpi-sim: OK`, 8 × `CASE … PASS`. The golden replays (`tests/sim/replay_spec.lua`) run in `make test` and must match natively too. If the harness's 1366×768 window does not fit, run `HIDPI_SIM_INTEGER_SIZE=1280x720 make hidpi-sim`.
+Expected: `make check exit=0`; 3 × `SMOKE OK … state=arena p1=1408,2688 p2=1664,2652 hash=581f15d4 … problems=none` (the same sim hash as in the sandbox, which proves cross-platform determinism of the 120-tick script); `hidpi-sim: OK`, 8 × `CASE … PASS`. The golden replays (`tests/sim/replay_spec.lua`) run in `make test` and must match natively too. If the harness's 1366×768 window does not fit, run `HIDPI_SIM_INTEGER_SIZE=1280x720 make hidpi-sim`.
 
 ## 2. Feel (`/Applications/love.app/Contents/MacOS/love .`)
 
@@ -44,6 +44,8 @@ The arena opens directly. P1: WASD + Space (gold). P2: arrows + Right Ctrl (teal
 | 8 | Respawn | When the turret hits you, the tank reappears at its spawn on the next tick; if the other tank sits on the spawn, it waits until the spawn is free | | |
 
 ### Tuning sign-off
+**Done (owner, 2026-11-27):** `player_speed = 7`, `bullet_speed_normal = 17`, `bullet_speed_fast = 34`, committed as `TUNED (owner, 2026-11-27)`. The rest of this section describes how to request further changes.
+
 F5 opens the debug editor (an in-memory copy; the HUD shows `TUNING MODIFIED`). `[` / `]` select, `-` / `=` adjust (each change restarts the arena), Backspace restores the committed values. Nothing is written to disk. Report the values you want; they are then committed to `config/tuning.lua` with the tag `TUNED (owner, <date>)`, and the golden replays are regenerated with `tools/update_goldens.lua` (called out in the PR). Subjective tuning is never tagged MEASURED.
 
 Optional for bug reports: F8 saves the current input recording to `~/Library/Application Support/LOVE/eagle-defense/replays/` as `arena-<date-time>-t<tick>.lua` (a new file each time; the HUD shows `REPLAY SAVED`, or `REPLAY SAVE FAILED` with the reason in the terminal). Pressing F8 again later in the same run saves a second, longer recording; both replay correctly.

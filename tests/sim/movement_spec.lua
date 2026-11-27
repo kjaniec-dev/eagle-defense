@@ -10,6 +10,10 @@ local bindings = require("config.bindings")
 
 local F = H.frame
 
+-- Expectations are written in terms of the committed player speed S, so the
+-- scenarios prove the rules at the signed-off tuning.
+local S = H.tuning().player_speed
+
 local function empty_arena(p1, p2, dummies)
   return H.arena_data({}, H.entities(p1, p2, dummies))
 end
@@ -19,12 +23,12 @@ describe("sim movement", function()
     local w = H.world({ arena = empty_arena({ 12, 12 }, { 0, 0 }) })
     local p1 = w.tanks[1]
     H.run(w, 1, F("up"))
-    assert.are.same({ 1536, 1530, "up" }, { p1.x, p1.y, p1.facing })
+    assert.are.same({ 1536, 1536 - S, "up" }, { p1.x, p1.y, p1.facing })
     H.run(w, 5, F(nil))
-    assert.are.same({ 1536, 1530 }, { p1.x, p1.y })
+    assert.are.same({ 1536, 1536 - S }, { p1.x, p1.y })
     H.run(w, 3, F("left"))
     -- the turn snapped y back to the 128 grid before moving
-    assert.are.same({ 1536 - 18, 1536, "left" }, { p1.x, p1.y, p1.facing })
+    assert.are.same({ 1536 - 3 * S, 1536, "left" }, { p1.x, p1.y, p1.facing })
   end)
 
   it("stops exactly at contact with a wall (clamp to contact)", function()
@@ -32,10 +36,13 @@ describe("sim movement", function()
     rows[6] = "XXXXXXXXXXXXX" -- tile row 5: y 1280..1536
     local w = H.world({ arena = H.arena_data(rows, H.entities({ 0, 14 }, { 24, 24 })) })
     local p1 = w.tanks[1]
-    H.run(w, 42, F("up"))
-    assert.are.equal(1792 - 42 * 6, p1.y) -- 1540: 4 u from the wall
+    -- start 40 full steps plus a partial step (0 < rest < S) below the wall
+    local rest = math.max(1, math.floor(S / 2))
+    p1.y = 1536 + 40 * S + rest
+    H.run(w, 40, F("up"))
+    assert.are.equal(1536 + rest, p1.y) -- `rest` u from the wall
     H.run(w, 1, F("up"))
-    assert.are.equal(1536, p1.y) -- moved only the 4 u to contact
+    assert.are.equal(1536, p1.y) -- moved only the `rest` u to contact
     H.run(w, 50, F("up"))
     assert.are.equal(1536, p1.y)
   end)
@@ -54,10 +61,13 @@ describe("sim movement", function()
   it("stops at contact with another tank; earlier tanks move first", function()
     local w = H.world({ arena = empty_arena({ 0, 20 }, { 0, 10 }) })
     local p1, p2 = w.tanks[1], w.tanks[2]
-    -- gap 1024 u, closing at 12 u/tick: P1 takes the last 4 u, P2 is blocked
+    -- gap 2S * 40 + g (0 < g < S), closing at 2S per tick: after 40 ticks
+    -- the gap g is left; P1 (earlier) takes all of it and P2 is blocked
+    local g = math.max(1, math.floor(S / 2))
+    p1.y = 1536 + 80 * S + g
     H.run(w, 200, F("up", "down"))
-    assert.are.equal(2560 - 85 * 6 - 4, p1.y)
-    assert.are.equal(1280 + 85 * 6, p2.y)
+    assert.are.equal(1536 + 40 * S, p1.y)
+    assert.are.equal(1280 + 40 * S, p2.y)
     assert.are.equal(p1.y, p2.y + 256)
   end)
 
@@ -70,9 +80,9 @@ describe("sim movement", function()
       local p1 = w.tanks[1]
       p1.x = x -- in the corridor below the wall band, moving along it
       H.run(w, 1, F("up"))
-      assert.are.same({ 1536, 1536 - 6 }, { p1.x, p1.y }, "x = " .. x)
+      assert.are.same({ 1536, 1536 - S }, { p1.x, p1.y }, "x = " .. x)
       H.run(w, 60, F("up"))
-      assert.are.same({ 1536, 1536 - 61 * 6 }, { p1.x, p1.y }, "x = " .. x)
+      assert.are.same({ 1536, 1536 - 61 * S }, { p1.x, p1.y }, "x = " .. x)
     end
   end)
 
@@ -81,10 +91,10 @@ describe("sim movement", function()
     local p1 = w.tanks[1]
     p1.x, p1.y = 600, 1600 -- 1600 = 12 * 128 + 64, 600 = 4 * 128 + 88
     H.run(w, 1, F("right"))
-    assert.are.same({ 606, 1536 }, { p1.x, p1.y })
+    assert.are.same({ 600 + S, 1536 }, { p1.x, p1.y })
     p1.x = 576 -- 4 * 128 + 64: tie
     H.run(w, 1, F("down"))
-    assert.are.same({ 512, 1542 }, { p1.x, p1.y })
+    assert.are.same({ 512, 1536 + S }, { p1.x, p1.y })
   end)
 
   it("a blocked snap turns in place, and the snap is still required on later ticks", function()
@@ -92,43 +102,49 @@ describe("sim movement", function()
     -- must not skip the snap and move unaligned.
     local w = H.world({ arena = empty_arena({ 2, 12, "right" }, { 0, 12, "right" }) })
     local p1, p2 = w.tanks[1], w.tanks[2]
-    H.run(w, 10, F("right"))
-    H.run(w, 10, F(nil, "right"))
-    assert.are.same({ 316, 60 }, { p1.x, p2.x }) -- touching, P1 unaligned
+    -- n steps keep P1 less than half a snap (64 u) past x = 256
+    local n = math.floor(63 / S)
+    local x1 = 256 + n * S
+    H.run(w, n, F("right"))
+    H.run(w, n, F(nil, "right"))
+    assert.are.same({ x1, n * S }, { p1.x, p2.x }) -- touching, P1 unaligned
     -- P1 turns up: the snap target x = 256 would overlap P2 -> no snap, no move
     H.run(w, 1, F("up"))
-    assert.are.same({ 316, 1536, "up" }, { p1.x, p1.y, p1.facing })
-    -- P2 backs off 6 u per tick; P1 keeps holding up (same as its facing)
+    assert.are.same({ x1, 1536, "up" }, { p1.x, p1.y, p1.facing })
+    -- P2 backs off S u per tick; P1 keeps holding up (same as its facing)
     local moved_at
-    for tick = 1, 12 do
+    for tick = 1, n + 2 do
       H.run(w, 1, F("up", "left"))
       if p1.y ~= 1536 then
         assert.are.equal(0, p1.x % 128, "moved vertically while unaligned")
         moved_at = moved_at or tick
       else
-        assert.are.equal(316, p1.x)
+        assert.are.equal(x1, p1.x)
       end
     end
-    -- P2 clears the snap target box once it is back at x = 0, after 10 ticks:
-    -- P1 (which moves first) snaps and moves on tick 11.
-    assert.are.equal(11, moved_at)
+    -- P2 clears the snap target box once it is back at x = 0, after n ticks:
+    -- P1 (which moves first) snaps and moves on tick n + 1.
+    assert.are.equal(n + 1, moved_at)
     assert.are.equal(256, p1.x)
-    assert.are.equal(1536 - 2 * 6, p1.y)
+    assert.are.equal(1536 - 2 * S, p1.y)
   end)
 
   it("reversing never snaps", function()
     local w = H.world({ arena = empty_arena({ 2, 12, "right" }, { 24, 24 }) })
     local p1 = w.tanks[1]
-    H.run(w, 10, F("right"))
-    assert.are.equal(316, p1.x)
-    H.run(w, 1, F("left"))
-    assert.are.same({ 310, 1536 }, { p1.x, p1.y })
+    local n = math.floor(63 / S) + 1 -- ends between 1/2 and 1 snap past 256
+    H.run(w, n, F("right"))
+    assert.are.equal(256 + n * S, p1.x)
+    H.run(w, 1, F("left")) -- reverse along x: no snap of x
+    local x = 256 + (n - 1) * S
+    assert.are.same({ x, 1536 }, { p1.x, p1.y })
+    assert.is_true(x % 128 ~= 0)
     H.run(w, 1, F("up")) -- turn: snaps x to 256
-    assert.are.same({ 256, 1530 }, { p1.x, p1.y })
+    assert.are.same({ 256, 1536 - S }, { p1.x, p1.y })
     H.run(w, 1, F("down")) -- reverse along y: no snap of y, x stays
     assert.are.same({ 256, 1536 }, { p1.x, p1.y })
     H.run(w, 1, F("down"))
-    assert.are.same({ 256, 1542 }, { p1.x, p1.y })
+    assert.are.same({ 256, 1536 + S }, { p1.x, p1.y })
   end)
 
   it("follows last-pressed direction through a full turn sequence (mapper -> sim)", function()
@@ -161,9 +177,10 @@ describe("sim movement", function()
     }
     assert.are.same({ "up", "up", "right", "up", "left", "left" }, { unpack(trace, 1, 6) })
     assert.is_nil(trace[7])
-    -- up x2 (y 1524); right: snap y up to 1536 (offset 116 > 64), x 1542;
-    -- up: snap x to 1536, y 1530; left: snap y to 1536, x 1530; left: x 1524
-    assert.are.same({ 1524, 1536, "left" }, { p1.x, p1.y, p1.facing })
+    -- up x2 (y 1536 - 2S); right: snap y back to 1536, x 1536 + S;
+    -- up: snap x to 1536, y 1536 - S; left: snap y to 1536, x 1536 - S;
+    -- left: x 1536 - 2S
+    assert.are.same({ 1536 - 2 * S, 1536, "left" }, { p1.x, p1.y, p1.facing })
   end)
 
   it("random driving never overlaps geometry and only moves along aligned axes", function()
@@ -188,7 +205,7 @@ describe("sim movement", function()
       H.assert_invariants(w)
       for i, t in ipairs(w.tanks) do
         local dx, dy = t.x - before[i][1], t.y - before[i][2]
-        assert.is_true(math.abs(dx) <= 64 + 6 and math.abs(dy) <= 64 + 6)
+        assert.is_true(math.abs(dx) <= 64 + S and math.abs(dy) <= 64 + S)
         if dx ~= 0 and dy == 0 then
           assert.are.equal(0, t.y % 128)
         elseif dy ~= 0 and dx == 0 then

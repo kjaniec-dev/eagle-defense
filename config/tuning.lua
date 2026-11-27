@@ -20,9 +20,21 @@
 return {
   version = 1,
   entries = {
-    player_speed = { 6, "UNV", "GAME_DESIGN placeholder 1.40 tiles/s -> 6 u/tick = 1.41 tiles/s" },
-    bullet_speed_normal = { 17, "UNV", "placeholder 4 tiles/s -> 17 u/tick = 3.98 tiles/s" },
-    bullet_speed_fast = { 34, "UNV", "placeholder 8 tiles/s -> 34 u/tick = 7.97 tiles/s" },
+    player_speed = {
+      7,
+      "TUNED (owner, 2026-11-27)",
+      "owner playtest sign-off: 7 u/tick = 1.64 tiles/s (was the UNV placeholder 6 = 1.41 tiles/s)",
+    },
+    bullet_speed_normal = {
+      17,
+      "TUNED (owner, 2026-11-27)",
+      "owner playtest sign-off: 17 u/tick = 3.98 tiles/s",
+    },
+    bullet_speed_fast = {
+      34,
+      "TUNED (owner, 2026-11-27)",
+      "owner playtest sign-off: 34 u/tick = 7.97 tiles/s",
+    },
     bullet_size = { 32, "UNV", "32 x 32 u = 1/8 tile" },
     bullet_limit = {
       { 1, 1, 2, 2 },

@@ -41,7 +41,7 @@ Units: **tiles** = playfield tiles (the playfield is 13×13 tiles). **cells** = 
 | Turning | On a perpendicular turn, the tank snaps to the nearest half-tile | CC | Snap to the half-tile grid. The snap distance is ≤ ¼ tile, so it is unnoticeable. An exact tie snaps up/left (**UNV**). A snap that would collide is not performed: the tank turns in place and retries the snap on later ticks (G1, TECHNICAL_DESIGN §6). |
 | Reversing | Reversing is instant, with no snap | CC | Same |
 | Simultaneous directions | Unknown | UNV | **Last-pressed direction wins**, so a released key restores the remaining held key. This is deterministic and testable. |
-| Speeds | Player ≈ basic enemy; fast enemy ≈ 2× basic | UNV | Data-driven values, stored as integer u/tick in `config/tuning.lua` (1 tile = 256 u). Placeholders: player 1.40 tiles/s (6 u/tick = 1.41 tiles/s), basic 0.70, fast 1.40, power 1.05, armor 0.70. Player speed is tuned by the owner in G1; enemy speeds in G4. |
+| Speeds | Player ≈ basic enemy; fast enemy ≈ 2× basic | Player: TUNED (owner, 2026-11-27); enemies: UNV | Data-driven values, stored as integer u/tick in `config/tuning.lua` (1 tile = 256 u). Player **7 u/tick = 1.64 tiles/s**, signed off by the owner after G1 playtesting (the placeholder was 6 u/tick = 1.41 tiles/s); this is subjective feel tuning, not a reference measurement. Enemy placeholders (tiles/s): basic 0.70, fast 1.40, power 1.05, armor 0.70, tuned in G4. |
 | Ice | The tank slides a short distance after input stops or turns | CC (duration UNV) | Slide of ≈ ½–1 tile, calibrated in G2 |
 | Tank vs tank | Tanks block each other. Overlap is resolved by refusing the move. | CC | Same, as clamp-to-contact: a move stops exactly at the blocking tank, wall or bound (G1-D1). Tanks spawning inside other tanks may move out (§4.5). |
 
@@ -51,7 +51,7 @@ Units: **tiles** = playfield tiles (the playfield is 13×13 tiles). **cells** = 
 |---|---|---|---|
 | Shot limit | 1 active player bullet at star 0–1, and 2 at star 2+ | DOC (star 2) | Same |
 | Firing | Fires as soon as a slot is free; there is no cooldown beyond that | CC | Same. A held fire button does **not** auto-repeat; this is an assumption, see Q4. |
-| Bullet speed | Normal and fast (star 1+ and the Power enemy) | DOC (qualitative) | Placeholders: normal 4 tiles/s (17 u/tick = 3.98 tiles/s), fast 8 tiles/s (34 u/tick = 7.97 tiles/s), tuned by the owner in G1. Bullet size 32 × 32 u (⅛ tile) is **UNV**. |
+| Bullet speed | Normal and fast (star 1+ and the Power enemy) | DOC (qualitative); values TUNED (owner, 2026-11-27) | Normal **17 u/tick = 3.98 tiles/s**, fast **34 u/tick = 7.97 tiles/s**, signed off by the owner after G1 playtesting (subjective feel tuning, not a reference measurement). The G1 turret's bullet speed (17) stays UNV. Bullet size 32 × 32 u (⅛ tile) is **UNV**. |
 | Bullet vs bullet | Opposing bullets cancel each other | CC | Player and enemy bullets cancel. Bullets from the same faction pass through each other (UNV). |
 | Point-blank shot | Unknown | UNV | A bullet whose spawn box (on the tank's front edge) already overlaps something resolves at once: opposing bullet → cancel, tank → hit, wall or bound → `bullet_hit_solid` without travel (G1). |
 | Friendly bullet (G1) | A hit stuns the partner (see §4.6) | CC | Until the stun arrives in G6, a player bullet that reaches the other player is consumed and reported as a friendly `tank_hit` with no other effect. If a hostile bullet hits the same player in the same sub-step, the hostile hit is the one that counts. |

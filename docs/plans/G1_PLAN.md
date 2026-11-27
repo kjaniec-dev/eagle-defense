@@ -233,6 +233,8 @@ Implementation clarifications from the plan review (no scope expansion; each has
 Clarification from the G1 independent review of PR #3 (2026-11-27; narrow, no G6 friendly-fire mechanics):
 4. **Mixed-faction simultaneous hits:** when friendly and hostile bullets overlap the same tank in one sub-step, all of them are still consumed and the tank still takes one effective hit, but that hit is the first hostile bullet in bullet order, never a friendly one listed earlier. Other collision priorities are unchanged (TECHNICAL_DESIGN §6).
 
+Owner tuning approval (2026-11-27, after manual playtesting, included in PR #3): `player_speed = 7` (was 6), `bullet_speed_normal = 17`, `bullet_speed_fast = 34`, tagged `TUNED (owner, 2026-11-27)` in `config/tuning.lua`; every other tuning value unchanged. The golden replays were regenerated with the approved tooling and the smoke expectation updated.
+
 Also in G1 (owner, PR #2 acceptance): the BSD grep portability correction for `tools/hidpi_sim.sh` with a regression test, as a separate commit.
 
 Process: Fast Track workflow without intermediate approvals unless a material blocker or contract change occurs. CI stays disabled. No BMAD. G1 is delivered as a Draft PR and is merged only on explicit owner authorization; G2 is not started automatically.
