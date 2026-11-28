@@ -11,20 +11,28 @@
 --
 -- Replays recorded with a debug-tuned (F5 overlay) tuning are refused:
 -- they do not represent committed tuning.
+--
+-- Arena identity (G2 clarification C3): this tool never writes arena_id. A
+-- fixture of a level-format arena without arena_id, or with an arena_id
+-- that does not match the arena file, is refused, so a regeneration cannot
+-- silently absorb an arena change; re-author the inputs with the generator
+-- (tools/gen_g2_replay_inputs.lua) and call it out in the PR.
 
 package.path = "./?.lua;" .. package.path
 local fs = require("tools.lib.fs")
 local serialize = require("src.core.serialize")
 local tuning = require("src.sim.tuning")
 local replay = require("src.sim.replay")
+local levels = require("tools.lib.levels")
 
 local DIR = "tests/fixtures/replays"
 
 local M = {}
 
 -- Regenerates one replay table in memory. Returns the updated table, or nil
--- and an error message.
-function M.regenerate(r, active)
+-- and an error message. opts.resolve_arena defaults to levels/arenas/.
+function M.regenerate(r, active, opts)
+  opts = opts or {}
   local ok, err = replay.check(r)
   if not ok then
     return nil, err
@@ -35,7 +43,9 @@ function M.regenerate(r, active)
   end
   local copy = serialize.decode(serialize.encode(r))
   copy.tuning_id, copy.tuning_version = active.id, active.version
-  local result, run_err = replay.run(copy, active)
+  local result, run_err = replay.run(copy, active, {
+    resolve_arena = opts.resolve_arena or levels.read_arena,
+  })
   if not result then
     return nil, run_err
   end

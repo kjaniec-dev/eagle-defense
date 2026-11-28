@@ -13,8 +13,8 @@
 --     and the target dummy behind it; a 1-tile wall (cols 7-10) and a
 --     2-tile wall (cols 13-16);
 --   * top right: a steel band (rows 4-5) with brick behind it (rows 2-3):
---     power bullets (F7 level 3) open it, normal bullets do not; an X block
---     (row 7) never breaks;
+--     power bullets (F7 level 3) open it, normal bullets do not; a 1-tile X
+--     block (rows 6-7, cols 18-19) never breaks;
 --   * the turret lane (rows 8-9): the turret at the right edge fires left
 --     across water (cols 18-21) and through forest (cols 12-15) into brick
 --     (cols 6-7), enemy-faction destruction;
@@ -35,8 +35,8 @@ return {
     ".............BBBB...BBBBBB",
     ".BBBB..BBBB..BBBB...SSSSSS",
     "B.B.B..BBBB..BBBB...SSSSSS",
-    "..........................",
-    "...XX.....................",
+    "..................XX......",
+    "..................XX......",
     "......BB....FFFF..WWWW....",
     "......BB....FFFF..WWWW....",
     "..........................",

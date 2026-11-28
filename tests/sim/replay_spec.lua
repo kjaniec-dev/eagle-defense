@@ -9,9 +9,20 @@ local tuning = require("src.sim.tuning")
 local sim = require("src.sim.sim")
 local layout = require("src.render.layout")
 local update_goldens = require("tools.update_goldens")
+local levels = require("tools.lib.levels")
 
 local DIR = "tests/fixtures/replays/"
-local NAMES = { "movement_tour", "shooting_gallery", "cancellation_duel", "stress_run" }
+local G1_NAMES = { "movement_tour", "shooting_gallery", "cancellation_duel", "stress_run" }
+local G2_NAMES = { "terrain_tour", "brick_demolition", "steel_and_power", "terrain_stress" }
+local NAMES = {}
+for _, n in ipairs(G1_NAMES) do
+  NAMES[#NAMES + 1] = n
+end
+for _, n in ipairs(G2_NAMES) do
+  NAMES[#NAMES + 1] = n
+end
+-- Level-format arenas are read from levels/arenas/ (G2 plan §14).
+local OPTS = { resolve_arena = levels.read_arena }
 
 local function load(name)
   return assert(serialize.decode(assert(fs.read(DIR .. name .. ".lua"))))
@@ -23,6 +34,7 @@ local ACTIVE = tuning.load()
 local function census(r)
   local counts = {}
   local res = assert(replay.run(r, ACTIVE, {
+    resolve_arena = levels.read_arena,
     on_tick = function(_, _, events)
       for _, e in ipairs(events) do
         local k = e.type
@@ -37,7 +49,7 @@ local function census(r)
 end
 
 describe("golden replays", function()
-  it("has the four G1 fixtures, recorded with the active tuning", function()
+  it("has the G1 and G2 fixtures, recorded with the active tuning", function()
     for _, name in ipairs(NAMES) do
       local r = load(name)
       assert.is_true(replay.check(r))
@@ -50,7 +62,7 @@ describe("golden replays", function()
 
   for _, name in ipairs(NAMES) do
     it(name .. " matches its checkpoint hashes, with the invariants on every tick", function()
-      assert.is_true(replay.verify(load(name), ACTIVE))
+      assert.is_true(replay.verify(load(name), ACTIVE, OPTS))
     end)
   end
 
@@ -72,7 +84,7 @@ describe("golden replays", function()
   -- to the values frozen at c82ff86.
   it("keeps every G1 checkpoint byte-identical to c82ff86 (only tuning_id changed)", function()
     local frozen = require("tests.sim.g1_frozen_checkpoints")
-    for _, name in ipairs(NAMES) do
+    for _, name in ipairs(G1_NAMES) do
       local r = load(name)
       local got = {}
       for i, cp in ipairs(r.checkpoints) do
@@ -120,6 +132,7 @@ describe("golden replays", function()
     for _, name in ipairs(NAMES) do
       local r = load(name)
       local regenerated = assert(update_goldens.regenerate(r, ACTIVE))
+      assert.are.equal(r.arena_id, regenerated.arena_id) -- never rewritten
       assert.are.equal(fs.read(DIR .. name .. ".lua"), serialize.encode(regenerated))
     end
     local tuned = load("movement_tour")
@@ -136,10 +149,12 @@ describe("golden replays", function()
       local s = require("src.core.serialize")
       local replay = require("src.sim.replay")
       local active = require("src.sim.tuning").load()
-      local names = { "movement_tour", "shooting_gallery", "cancellation_duel", "stress_run" }
+      local opts = { resolve_arena = require("tools.lib.levels").read_arena }
+      local names = { "movement_tour", "shooting_gallery", "cancellation_duel", "stress_run",
+        "terrain_tour", "brick_demolition", "steel_and_power", "terrain_stress" }
       for _, n in ipairs(names) do
         local r = s.decode(fs.read("tests/fixtures/replays/" .. n .. ".lua"))
-        io.write(n, " ", assert(replay.run(r, active)).final, "\n")
+        io.write(n, " ", assert(replay.run(r, active, opts)).final, "\n")
       end
     ]]
     local path = os.tmpname()
@@ -152,7 +167,7 @@ describe("golden replays", function()
     os.remove(path)
     local expected = {}
     for _, name in ipairs(NAMES) do
-      expected[#expected + 1] = name .. " " .. assert(replay.run(load(name), ACTIVE)).final
+      expected[#expected + 1] = name .. " " .. assert(replay.run(load(name), ACTIVE, OPTS)).final
     end
     assert.are.equal(table.concat(expected, "\n") .. "\n", out)
   end)
@@ -161,6 +176,7 @@ describe("golden replays", function()
     for _, tile_px in ipairs({ 24, 32 }) do
       for _, name in ipairs(NAMES) do
         local ok, err = replay.verify(load(name), ACTIVE, {
+          resolve_arena = levels.read_arena,
           on_tick = function(w)
             local before = sim.hash(w)
             local view = layout.build(w, tile_px, 0, 0)

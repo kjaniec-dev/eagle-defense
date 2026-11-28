@@ -5,6 +5,9 @@
 --   {
 --     format = 1, name = "...", description = "...",
 --     arena = "g1_arena", seed = 1,
+--     arena_id = "8 hex",      -- optional for config arenas (legacy G1
+--                              -- headers), required for level-format arenas
+--     player_level = 0..3,     -- optional; default tuning.arena_player_level
 --     tuning_id = "8 hex", tuning_version = 1, debug_tuned = false,
 --     checkpoint_every = 60,
 --     frames = { { "U.PR..", 12 }, ... },   -- run-length encoded frame codes
@@ -15,6 +18,8 @@
 
 local sim = require("src.sim.sim")
 local arena_mod = require("src.sim.arena")
+local level = require("src.sim.level")
+local world_mod = require("src.sim.world")
 
 local M = {}
 
@@ -102,6 +107,15 @@ function M.check(replay)
   if type(replay.debug_tuned) ~= "boolean" then
     return nil, "replay: debug_tuned (boolean) required"
   end
+  local lv = replay.player_level
+  if lv ~= nil and (type(lv) ~= "number" or lv ~= math.floor(lv) or lv < 0 or lv > 3) then
+    return nil, "replay: player_level must be an integer 0..3"
+  end
+  if replay.arena_id ~= nil then
+    if type(replay.arena_id) ~= "string" or not replay.arena_id:match("^%x%x%x%x%x%x%x%x$") then
+      return nil, "replay: arena_id must be 8 hex digits"
+    end
+  end
   if type(replay.frames) ~= "table" or type(replay.checkpoints) ~= "table" then
     return nil, "replay: frames and checkpoints required"
   end
@@ -112,11 +126,40 @@ function M.check(replay)
   return true
 end
 
+-- Builds the battlefield of a replay and checks its identity (G2 plan §14,
+-- clarification C3). Returns the built arena and its id, or nil and an
+-- error message.
+function M.resolve(replay, opts)
+  local ok, built = pcall(level.load_arena, replay.arena, opts and opts.resolve_arena)
+  if not ok then
+    return nil, ("replay %s: %s"):format(tostring(replay.name), tostring(built))
+  end
+  local id = arena_mod.id(built)
+  if replay.arena_id == nil then
+    if not arena_mod.is_config(replay.arena) then
+      return nil,
+        (
+          "replay %s: arena_id required for the level-format arena %s (loaded arena_id %s); "
+          .. "G2 recordings and goldens must record it"
+        ):format(replay.name, replay.arena, id)
+    end
+  elseif replay.arena_id ~= id then
+    return nil,
+      (
+        "replay %s: arena_id mismatch for arena %s (recorded %s, loaded %s); the arena changed "
+        .. "since the recording, so re-author the inputs instead of regenerating"
+      ):format(replay.name, replay.arena, replay.arena_id, id)
+  end
+  return built, id
+end
+
 -- Runs a replay against the active tuning ({ values, version, id }).
--- Refuses a replay recorded with a different tuning id. Asserts the tick
--- invariants on every tick. opts.on_tick(world, tick, events) is called after
--- each step with that tick's events (presentation probes; it must not mutate
--- the world).
+-- Refuses a replay recorded with a different tuning id, and one whose arena
+-- identity does not match (M.resolve). Asserts the tick invariants,
+-- including terrain invariant 9, on every tick. opts.resolve_arena(name) ->
+-- text reads level-format arenas. opts.on_tick(world, tick, events) is
+-- called after each step with that tick's events (presentation probes; it
+-- must not mutate the world).
 -- Returns { checkpoints = { { tick, hash }, ... }, final = hash, world = w }
 -- or nil and an error message.
 function M.run(replay, active, opts)
@@ -138,17 +181,29 @@ function M.run(replay, active, opts)
         active.version
       )
   end
+  local built, arena_err = M.resolve(replay, opts)
+  if not built then
+    return nil, arena_err
+  end
   local w = sim.new({
-    arena = arena_mod.load(replay.arena),
+    arena = built,
     tuning = active.values,
     seed = replay.seed,
+    player_level = replay.player_level,
   })
   local codes = M.expand(replay.frames)
   local checkpoints = {}
   local every = replay.checkpoint_every
+  local prev = world_mod.copy_cells(w.cells)
   for i, code in ipairs(codes) do
     sim.step(w, M.decode_frame(code))
     local bad = sim.violations(w)
+    for _, p in ipairs(world_mod.terrain_violations(prev, w.cells)) do
+      bad[#bad + 1] = p
+    end
+    for j = 1, #prev do
+      prev[j] = w.cells[j]
+    end
     if #bad > 0 then
       return nil,
         ("replay %s: invariant violated at tick %d: %s"):format(
@@ -200,13 +255,16 @@ function M.verify(replay, active, opts)
 end
 
 -- A new recording for live play (src/app). Tagged debug_tuned when the
--- tuning was modified with the F5 overlay.
+-- tuning was modified with the F5 overlay. New recordings always carry the
+-- arena identity and the players' level (clarifications C2, C3).
 function M.new_recording(meta)
   return {
     format = M.FORMAT,
     name = meta.name,
-    description = meta.description or "recorded in the G1 arena",
+    description = meta.description or ("recorded in the " .. tostring(meta.arena) .. " arena"),
     arena = meta.arena,
+    arena_id = meta.arena_id,
+    player_level = meta.player_level,
     seed = meta.seed,
     tuning_id = meta.tuning_id,
     tuning_version = meta.tuning_version,
