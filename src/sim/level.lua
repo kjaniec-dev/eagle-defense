@@ -68,27 +68,74 @@ local function is_int(v)
   return type(v) == "number" and v == math.floor(v)
 end
 
-local function sorted_keys(t)
-  local out = {}
-  for k in pairs(t) do
-    out[#out + 1] = tostring(k)
+-- A key as written in a level file: "name" for strings, [n] for numbers.
+-- Keys are never converted between types, so the string "1" is not the
+-- array index 1 (review P2-1).
+local function key_text(k)
+  if type(k) == "string" then
+    return ("%q"):format(k)
   end
-  table.sort(out)
-  return out
+  return "[" .. tostring(k) .. "]"
+end
+
+-- Appends one problem per offending key, in sorted order (pairs order is
+-- not deterministic, the reported problems are).
+local function report_keys(bad, fmt, problems)
+  table.sort(bad)
+  for _, k in ipairs(bad) do
+    problems[#problems + 1] = fmt:format(k)
+  end
+end
+
+-- Strict array check (review P2-1): every key must be a number that is an
+-- integer index 1..n, where n is the number of keys, so the table is
+-- exactly the contiguous list t[1..n]: no string keys (not even "1"), no
+-- holes, no extra keys. Returns n, or nil after reporting each bad key with
+-- `fmt` (one %s for the key).
+local function list_length(t, fmt, problems)
+  local count = 0
+  for _ in pairs(t) do
+    count = count + 1
+  end
+  local bad = {}
+  for k in pairs(t) do
+    if type(k) ~= "number" or not is_int(k) or k < 1 or k > count then
+      bad[#bad + 1] = key_text(k)
+    end
+  end
+  if #bad > 0 then
+    report_keys(bad, fmt, problems)
+    return nil
+  end
+  return count
+end
+
+-- Strict record check: every key must be one of the allowed field names
+-- (strings). Reports each other key with `fmt`.
+local function check_fields(t, allowed, fmt, problems)
+  local bad = {}
+  for k in pairs(t) do
+    if type(k) ~= "string" or not allowed[k] then
+      bad[#bad + 1] = key_text(k)
+    end
+  end
+  report_keys(bad, fmt, problems)
+  return #bad == 0
 end
 
 -- Reads the 26 x 26 character grid. Returns grid[r][c] (0-based) or nil.
 local function read_map(map, problems)
-  if type(map) ~= "table" or #map ~= M.HALF then
+  if type(map) ~= "table" then
     problems[#problems + 1] = ("map: %d rows expected"):format(M.HALF)
     return nil
   end
-  for _, k in ipairs(sorted_keys(map)) do
-    local n = tonumber(k)
-    if not n or not is_int(n) or n < 1 or n > M.HALF then
-      problems[#problems + 1] = "map: unexpected key " .. k
-      return nil
-    end
+  local n = list_length(map, "map: unexpected key %s (a list of rows expected)", problems)
+  if not n then
+    return nil
+  end
+  if n ~= M.HALF then
+    problems[#problems + 1] = ("map: %d rows expected"):format(M.HALF)
+    return nil
   end
   local grid = {}
   local ok = true
@@ -217,11 +264,7 @@ function M.reachable(grid, from, hq)
 end
 
 local function check_header(data, profile, problems)
-  for _, k in ipairs(sorted_keys(data)) do
-    if not KEYS[profile][k] then
-      problems[#problems + 1] = ("%s: unknown key %q"):format(profile, k)
-    end
-  end
+  check_fields(data, KEYS[profile], profile .. ": unknown key %s", problems)
   if profile == "arena" then
     -- an arena's name is its file name (levels/arenas/<name>.lua)
     if type(data.name) ~= "string" or not data.name:match("^[%w_]+$") or #data.name > 40 then
@@ -260,11 +303,7 @@ local function check_header(data, profile, problems)
       sum = sum + v
     end
   end
-  for _, k in ipairs(sorted_keys(roster)) do
-    if not known[k] then
-      problems[#problems + 1] = ("roster: unknown key %q"):format(k)
-    end
-  end
+  check_fields(roster, known, "roster: unknown key %s", problems)
   if sum ~= M.ROSTER_TOTAL then
     problems[#problems + 1] = ("roster: %d enemies expected, got %d"):format(M.ROSTER_TOTAL, sum)
   end
@@ -316,22 +355,29 @@ local function check_hq(grid, blocks, problems)
   end
 end
 
+local DUMMY_FIELDS = { kind = true, x = true, y = true, facing = true }
+
 -- Dummies (arena profile): { kind, x, y (half-tiles), facing }, not on
--- tank-blocking terrain and not overlapping markers or each other.
+-- tank-blocking terrain and not overlapping markers or each other. `list`
+-- is nil when the field is absent; any other non-table value (false, a
+-- string, ...) is an error, and the table must be a strict list.
 local function read_dummies(list, cells, blocks, problems)
   local out = {}
   if list == nil then
     return out
   end
-  if type(list) ~= "table" or #list > M.MAX_DUMMIES then
-    problems[#problems + 1] = ("dummies: list of at most %d expected"):format(M.MAX_DUMMIES)
+  local bad_list = ("dummies: list of at most %d expected"):format(M.MAX_DUMMIES)
+  if type(list) ~= "table" then
+    problems[#problems + 1] = bad_list
     return out
   end
-  for _, k in ipairs(sorted_keys(list)) do
-    local n = tonumber(k)
-    if not n or not is_int(n) or n < 1 or n > #list then
-      problems[#problems + 1] = ("dummies: unexpected key %s (a list expected)"):format(k)
-    end
+  local n = list_length(list, "dummies: unexpected key %s (a list expected)", problems)
+  if not n then
+    return out
+  end
+  if n > M.MAX_DUMMIES then
+    problems[#problems + 1] = bad_list
+    return out
   end
   local markers = {}
   for _, ch in ipairs({ "1", "2", "E", "H" }) do
@@ -339,7 +385,8 @@ local function read_dummies(list, cells, blocks, problems)
       markers[#markers + 1] = b
     end
   end
-  for i, d in ipairs(list) do
+  for i = 1, n do
+    local d = list[i]
     local where = ("dummy %d"):format(i)
     local ok = type(d) == "table"
       and M.DUMMY_KINDS[d.kind]
@@ -356,11 +403,7 @@ local function read_dummies(list, cells, blocks, problems)
         .. (M.HALF - 2)
         .. ") and facing required"
     else
-      for _, k in ipairs(sorted_keys(d)) do
-        if k ~= "kind" and k ~= "x" and k ~= "y" and k ~= "facing" then
-          problems[#problems + 1] = ("%s: unknown key %q"):format(where, k)
-        end
-      end
+      check_fields(d, DUMMY_FIELDS, where .. ": unknown key %s", problems)
       local box = { d.x, d.y }
       if
         terrain.box_hits(
@@ -421,7 +464,13 @@ function M.parse(text, profile)
   if profile == "campaign" then
     check_hq(grid, blocks, problems)
   end
-  local dummies = read_dummies(profile == "arena" and data.dummies or nil, cells, blocks, problems)
+  -- (not `profile == "arena" and data.dummies or nil`: that would turn
+  -- dummies = false into "absent", review P2-1)
+  local dummies_field = nil
+  if profile == "arena" then
+    dummies_field = data.dummies
+  end
+  local dummies = read_dummies(dummies_field, cells, blocks, problems)
   if #problems > 0 then
     return nil, problems
   end

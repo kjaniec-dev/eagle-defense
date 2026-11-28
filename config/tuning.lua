@@ -35,7 +35,11 @@ return {
       "TUNED (owner, 2026-11-27)",
       "owner playtest sign-off: 34 u/tick = 7.97 tiles/s",
     },
-    bullet_size = { 32, "UNV", "32 x 32 u = 1/8 tile" },
+    bullet_size = {
+      32,
+      "UNV",
+      "32 x 32 u = 1/8 tile; supported 8..64 u, so it always lies inside its brick strip",
+    },
     bullet_limit = {
       { 1, 1, 2, 2 },
       "DOC",

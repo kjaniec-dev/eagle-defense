@@ -17,7 +17,11 @@ M.SCHEMA = {
   player_speed = { min = 1, max = 64 },
   bullet_speed_normal = { min = 1, max = 512 },
   bullet_speed_fast = { min = 1, max = 512 },
-  bullet_size = { min = 8, max = 128 },
+  -- At most 64 u (G2 review P2-2): a footprint of size s centered within
+  -- 32 u of a cell boundary then always lies inside the 2-cell (128 u)
+  -- destruction strip centered on that boundary, since 32 + s / 2 <= 64.
+  -- Larger bullets could touch brick outside their strip.
+  bullet_size = { min = 8, max = 64 },
   bullet_limit = { list = 4, min = 1, max = 8 },
   fast_bullet_level = { min = 0, max = 3 },
   arena_player_level = { min = 0, max = 3 },

@@ -529,6 +529,82 @@ describe("steel and power bullets (G2-D3)", function()
   end)
 end)
 
+describe("bullet footprint versus the destruction strip (review P2-2)", function()
+  -- Blocking cells under the footprint in the impact line, for a bullet
+  -- over solid brick.
+  local function touched(hit, b)
+    local d = require("src.sim.units").DIRS[b.dir]
+    local vertical = d.dx == 0
+    local px = vertical and b.x or b.y
+    local out = {}
+    for p = math.floor(px / 64), math.floor((px + b.size - 1) / 64) do
+      out[#out + 1] = vertical and idx(p, hit.line) or idx(hit.line, p)
+    end
+    return out
+  end
+
+  local function solid_brick()
+    local cells = {}
+    for i = 1, 52 * 52 do
+      cells[i] = H.CODE.brick
+    end
+    return cells
+  end
+
+  it(
+    "every supported bullet size, at every alignment, destroys all the brick it touches",
+    function()
+      local tu = H.tuning()
+      local cells = solid_brick()
+      local misses = {}
+      for size = 8, 64 do
+        for off = 0, 63 do
+          for _, dir in ipairs({ "up", "down", "left", "right" }) do
+            local b = { size = size, dir = dir }
+            if dir == "up" or dir == "down" then
+              b.x, b.y = 1216 + off, 1500
+            else
+              b.x, b.y = 1500, 1216 + off
+            end
+            local hit = destruction.impact(cells, b, tu)
+            local removed = {}
+            for _, i in ipairs(hit.brick) do
+              removed[i] = true
+            end
+            for _, i in ipairs(touched(hit, b)) do
+              if not removed[i] then
+                misses[#misses + 1] = ("size %d offset %d %s"):format(size, off, dir)
+              end
+            end
+          end
+        end
+      end
+      assert.are.same({}, misses)
+    end
+  )
+
+  it("rejects the previously accepted oversized bullets (65..128 u)", function()
+    local tuning = require("src.sim.tuning")
+    local v = tuning.load().values
+    for _, size in ipairs({ 65, 96, 128 }) do
+      local c = tuning.copy(v)
+      c.bullet_size = size
+      assert.is_nil((tuning.check_values(c)), size)
+    end
+    for _, size in ipairs({ 8, 32, 64 }) do
+      local c = tuning.copy(v)
+      c.bullet_size = size
+      assert.is_true(tuning.check_values(c), size)
+    end
+    assert.are.equal(32, v.bullet_size) -- the committed default is unchanged
+    -- why: at 128 u an off-boundary bullet touches brick outside its strip
+    local b = { x = 1200, y = 1500, size = 128, dir = "up" } -- center 1264 -> strip 19, 20
+    local hit = destruction.impact(solid_brick(), b, H.tuning())
+    assert.are.same({ idx(19, hit.line), idx(20, hit.line) }, hit.brick)
+    assert.are.same({ idx(18, hit.line), idx(19, hit.line), idx(20, hit.line) }, touched(hit, b))
+  end)
+end)
+
 describe("no tunnelling through cell remnants", function()
   -- A 1-cell-thick line of brick or steel; bullets at speeds up to 512 u/tick
   -- and 64 phase offsets, in all four directions, must hit it.

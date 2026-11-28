@@ -114,7 +114,7 @@ When a bullet box overlaps at least one bullet-blocking cell after an advance (o
    - Steel and block cells there are untouched, unless the bullet has power (§6.3).
    - The bullet is consumed even when the strip contains no brick (for example a steel or block hit).
 
-The defaults are `brick_strip_cells = 2` and `brick_strip_depth = 1`: a ½-tile-wide, ¼-tile-deep strip, as in GAME_DESIGN §4.3. The bullet footprint (32 u) always lies inside the strip, because `|c − b| ≤ 32`.
+The defaults are `brick_strip_cells = 2` and `brick_strip_depth = 1`: a ½-tile-wide, ¼-tile-deep strip, as in GAME_DESIGN §4.3. The bullet footprint (32 u) always lies inside the strip, because `|c − b| ≤ 32`. This holds for every bullet size up to 64 u, and the tuning schema enforces that bound (independent review P2-2, §19).
 
 A fired bullet's center is `t.x + 128` (or `t.y + 128`). An aligned tank (on the 128 u grid) therefore always shoots exactly on a cell boundary. Only a tank whose snap was blocked shoots off the boundary, and the tie rule covers that case.
 
@@ -489,3 +489,8 @@ The owner approved G2-D1 … G2-D7 and authorized implementation with the six cl
 - A snap-only displacement (the snap succeeds, but the forward move is 0) does not arm `ice_dir`; it clears it.
 - The finite-slide and no-retrigger guarantees are unchanged, and a focused regression test covers the snap-only case.
 - A slide step of 0 u (contact) ends the slide, and the slide uses that tick's movement.
+
+### Independent review corrections (review of `fc0fedf`, 2026-11-28)
+The architecture, batching, ice model, replay identity and G1 compatibility were accepted. Two bounded corrections, with no change to the approved destruction rules or tuning:
+- **P2-1, strict level arrays.** `map`, `dummies` and every record (the header, `roster`, a dummy entry) are validated without converting key types. An array must be exactly `t[1..n]`: no string keys such as `"1"`, no holes, no extra keys. A present `dummies` that is not a table (e.g. `false`) is an error. No entry is skipped silently.
+- **P2-2, bullet size bound.** `bullet_size` is limited to 8–64 u (default 32, unchanged), so the footprint always lies inside the 2-cell strip (§6.2). The tuning id is unchanged, because the schema is not part of it.

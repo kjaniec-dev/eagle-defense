@@ -1,5 +1,5 @@
 -- Test fixture (G2 plan §11, §15): a keyed entry in the dummies list
--- expect: dummies: unexpected key extra (a list expected)
+-- expect: dummies: unexpected key "extra" (a list expected)
 return {
   name = "fixture_arena",
   map = {

@@ -194,6 +194,68 @@ describe("level loader", function()
   end)
 end)
 
+describe("strict level arrays (review P2-1)", function()
+  local TARGET = '{ kind = "target", x = 1, y = 1, facing = "down" }'
+  local base = fs.read(DIR .. "valid/arena_basic.lua")
+
+  local function parse_with_dummies(lua)
+    local text = base:gsub("  dummies = {.-\n  },\n", function()
+      return lua
+    end)
+    return level.parse(text, "arena")
+  end
+
+  it("treats an absent dummies field as none, and any other non-table value as an error", function()
+    local built = assert(parse_with_dummies(""))
+    assert.are.equal(2, #built.entities)
+    for _, v in ipairs({ "false", "true", "0", '"none"' }) do
+      local b, problems = parse_with_dummies("  dummies = " .. v .. ",\n")
+      assert.is_nil(b, v)
+      assert.are.same({ "dummies: list of at most 14 expected" }, problems, v)
+    end
+  end)
+
+  it('never converts key types: the string "1" is not the index 1', function()
+    local _, problems = parse_with_dummies(
+      '  dummies = {\n    ["1"] = { kind = "target", x = 1, y = 1, facing = "down" },\n  },\n'
+    )
+    assert.are.same({ 'dummies: unexpected key "1" (a list expected)' }, problems)
+    local _, p2 = parse_with_dummies(
+      "  dummies = {\n    [1] = "
+        .. TARGET
+        .. ',\n    [2.5] = { kind = "target", x = 5, y = 1, facing = "down" },\n  },\n'
+    )
+    assert.are.same({ "dummies: unexpected key [2.5] (a list expected)" }, p2)
+  end)
+
+  it("accepts explicit contiguous indices like a plain list", function()
+    local built = assert(
+      parse_with_dummies(
+        '  dummies = {\n    [2] = { kind = "turret", x = 22, y = 0, facing = "left" },\n    [1] = '
+          .. TARGET
+          .. ",\n  },\n"
+      )
+    )
+    assert.are.same({ "target", "turret" }, { built.entities[3].kind, built.entities[4].kind })
+  end)
+
+  it("reports bad keys in a deterministic (sorted) order", function()
+    local _, problems =
+      parse_with_dummies("  dummies = {\n    zeta = 1,\n    alpha = 2,\n    [9] = 3,\n  },\n")
+    assert.are.same({
+      'dummies: unexpected key "alpha" (a list expected)',
+      'dummies: unexpected key "zeta" (a list expected)',
+      "dummies: unexpected key [9] (a list expected)",
+    }, problems)
+  end)
+
+  it("keeps every shipped level and its arena identity", function()
+    local built = assert(level.load_arena("g2_terrain", levels.read_arena))
+    assert.are.equal("8b30c45c", require("src.sim.arena").id(built)) -- recorded by the G2 goldens
+    assert.are.same({}, (validate.check_tree()))
+  end)
+end)
+
 describe("arena selection and the validator", function()
   it("resolves config arenas with the G1 loader and others through the reader", function()
     local g1 = level.load_arena("g1_arena")
