@@ -37,6 +37,10 @@ M.REQUIRED_FILES = {
   "screenshots/smoke.png",
   "screenshots/smoke-window.png",
   "screenshots/smoke.log",
+  -- G2 terrain smoke (tools/smoke.sh runs both arenas, clarification C4)
+  "screenshots/smoke-g2_terrain.png",
+  "screenshots/smoke-g2_terrain-window.png",
+  "screenshots/smoke-g2_terrain.log",
   -- SIMULATED HiDPI harness (tools/hidpi_sim.sh): both modes at DPI 2.
   "hidpi-sim/integer-dpi2.log",
   "hidpi-sim/fit-dpi2.log",

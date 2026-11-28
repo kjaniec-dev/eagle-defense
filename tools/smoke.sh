@@ -4,12 +4,22 @@
 # backbuffer, verifies pixel-perfect integer scaling in PHYSICAL pixels,
 # and checks the expected arena outcome (positions and sim hash).
 #
+# Both arenas run at every window size (G2 clarification C4), each with its
+# arena passed explicitly and its own script and expectation
+# (tools/lib/smoke_expect.sh):
+#   --arena=g1_arena    the G1 smoke, unchanged (hash 581f15d4)
+#   --arena=g2_terrain  the terrain smoke (ice slide, point-blank brick)
+#
 # Usage: tools/smoke.sh [TICKS] [OUT_PNG] [WINDOW_SIZES]
 #   WINDOW_SIZES: space-separated *logical* WxH list (window points).
 #     Defaults: Linux  "1280x720 1920x1080 1366x768 800x600" (Xvfb, DPI 1)
 #               macOS  "800x600 1024x640 1280x720" (these must fit on the
 #                       display; HiDPI makes physical = logical x DPI scale)
 #     Can also be set via the SMOKE_SIZES environment variable.
+#   SMOKE_ARENAS (environment): default "g1_arena g2_terrain".
+#   Outputs: OUT_PNG for the G1 arena at the first size, then
+#     <OUT>-<size>.png; the terrain arena uses <OUT>-g2_terrain.png and
+#     <OUT>-g2_terrain-<size>.png (each with -window.png and .log).
 #
 # Linux runs under Xvfb with software GL (sandbox evidence only).
 # macOS opens a real window and needs a logged-in GUI session. Its
@@ -33,6 +43,7 @@ else
   DEFAULT_SIZES="1280x720 1920x1080 1366x768 800x600"
 fi
 SIZES="${3:-${SMOKE_SIZES:-$DEFAULT_SIZES}}"
+ARENAS="${SMOKE_ARENAS:-g1_arena g2_terrain}"
 TIMEOUT_SECS="${SMOKE_TIMEOUT:-60}"
 
 LOVE="${LOVE:-love}"
@@ -62,11 +73,22 @@ run_with_timeout() {
   fi
 }
 
+# Expected 120-tick outcome of an arena's smoke script.
+expect_for() {
+  case "$1" in
+    g1_arena) echo "$SMOKE_EXPECT_120" ;;
+    g2_terrain) echo "$SMOKE_EXPECT_G2_120" ;;
+    *) echo "smoke: unknown arena '$1'" >&2; return 1 ;;
+  esac
+}
+
 smoke_one() {
-  local size="$1" out="$2"
+  local arena="$1" size="$2" out="$3"
   local window_out="${out%.png}-window.png"
   local log="${out%.png}.log"
-  local run=("$LOVE" "$ROOT" "--smoke=$TICKS" "--window=$size" "--smoke-out=$out"
+  local expect
+  expect="$(expect_for "$arena")" || exit 1
+  local run=("$LOVE" "$ROOT" "--smoke=$TICKS" "--arena=$arena" "--window=$size" "--smoke-out=$out"
     "--smoke-window-out=$window_out")
   local code
   rm -f "$out" "$window_out" "$log"
@@ -82,15 +104,16 @@ smoke_one() {
 
   grep -E '^SMOKE (OK|FAIL)' "$log" || true
   if [[ $code -ne 0 ]]; then
-    echo "smoke[$size]: FAILED (exit $code), log: $log" >&2
+    echo "smoke[$arena $size]: FAILED (exit $code), log: $log" >&2
     grep -v -E '^(ALSA|\[ALSOFT\]|\[[WE]\]\[)' "$log" | tail -20 >&2
     exit 1
   fi
-  grep -q '^SMOKE OK' "$log" || { echo "smoke[$size]: no SMOKE OK line" >&2; exit 1; }
+  grep -q '^SMOKE OK' "$log" || { echo "smoke[$arena $size]: no SMOKE OK line" >&2; exit 1; }
+  grep -q " arena=$arena " "$log" || { echo "smoke[$arena $size]: the app did not run arena $arena" >&2; exit 1; }
   # The requested size is logical; the window must actually have it, so a
   # display that is too small fails loudly instead of testing another size.
   grep -q " logical=$size " "$log" || {
-    echo "smoke[$size]: window logical size not applied (display too small? set SMOKE_SIZES)" >&2
+    echo "smoke[$arena $size]: window logical size not applied (display too small? set SMOKE_SIZES)" >&2
     exit 1
   }
 
@@ -98,8 +121,8 @@ smoke_one() {
   # pinned in tools/lib/smoke_expect.sh and checked against the pure
   # simulation by tests/app/arena_spec.lua. Here the real app must agree.
   if [[ "$TICKS" == "120" ]]; then
-    grep -q " $SMOKE_EXPECT_120 " "$log" || {
-      echo "smoke[$size]: arena outcome differs (expected $SMOKE_EXPECT_120)" >&2
+    grep -q " $expect " "$log" || {
+      echo "smoke[$arena $size]: arena outcome differs (expected $expect)" >&2
       exit 1
     }
   fi
@@ -108,17 +131,20 @@ smoke_one() {
   # validates the PNG header and works with GNU and BSD/macOS od.
   local dims
   dims="$(png_dims "$out")" || dims="unreadable"
-  [[ "$dims" == "640x360" ]] || { echo "smoke[$size]: unexpected canvas size '$dims' (expected 640x360): $out" >&2; exit 1; }
-  [[ -s "$window_out" ]] || { echo "smoke[$size]: missing window capture" >&2; exit 1; }
+  [[ "$dims" == "640x360" ]] || { echo "smoke[$arena $size]: unexpected canvas size '$dims' (expected 640x360): $out" >&2; exit 1; }
+  [[ -s "$window_out" ]] || { echo "smoke[$arena $size]: missing window capture" >&2; exit 1; }
 }
 
-first=1
-for size in $SIZES; do
-  if [[ $first -eq 1 ]]; then
-    smoke_one "$size" "$OUT"
-    first=0
-  else
-    smoke_one "$size" "${OUT%.png}-$size.png"
-  fi
+for arena in $ARENAS; do
+  if [[ "$arena" == "g1_arena" ]]; then base="${OUT%.png}"; else base="${OUT%.png}-$arena"; fi
+  first=1
+  for size in $SIZES; do
+    if [[ $first -eq 1 ]]; then
+      smoke_one "$arena" "$size" "$base.png"
+      first=0
+    else
+      smoke_one "$arena" "$size" "$base-$size.png"
+    fi
+  done
 done
-echo "smoke: OK ($SIZES) on $OS -> $(dirname "$OUT")"
+echo "smoke: OK (arenas: $ARENAS; sizes: $SIZES) on $OS -> $(dirname "$OUT")"

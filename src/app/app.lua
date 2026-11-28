@@ -41,6 +41,12 @@ function App.load(argv)
   App.exit_code = nil
 
   local ctx = {}
+  ctx.arena = App.opts.arena or args_mod.DEFAULT_ARENA
+  -- Level-format arenas: levels/arenas/<name>.lua through love.filesystem
+  -- (src/sim never reads files).
+  ctx.read_level = function(name)
+    return love.filesystem.read("levels/arenas/" .. name .. ".lua")
+  end
   ctx.quit = function()
     App.exit_code = 0
   end
@@ -74,7 +80,7 @@ end
 local function on_tick(tick)
   local frame
   if App.opts.smoke then
-    frame = args_mod.smoke_frame(tick)
+    frame = args_mod.smoke_frame(tick, App.opts.arena or args_mod.DEFAULT_ARENA)
   else
     frame = App.mapper:update(App.devices:sample())
   end
@@ -168,13 +174,14 @@ local function smoke_report(window_image)
   local renderer = { love.graphics.getRendererInfo() }
   local passed = #problems == 0
   local parts = {
-    ("SMOKE %s ticks=%d state=%s p1=%s p2=%s hash=%s"):format(
+    ("SMOKE %s ticks=%d state=%s p1=%s p2=%s hash=%s arena=%s"):format(
       passed and "OK" or "FAIL",
       App.loop.tick,
       App.machine.current_name,
       info.p1 or "-",
       info.p2 or "-",
-      info.hash or "-"
+      info.hash or "-",
+      info.arena or "-"
     ),
     ("logical=%dx%d physical=%dx%d dpi=%.2f screenshot=%dx%d"):format(lw, lh, pw, ph, dpi, ww, wh),
     ("mode=%s canvas=%dx%d canvas_dpi=%.2f"):format(screen.mode, cw, ch, setup.canvas_dpi),

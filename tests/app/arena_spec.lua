@@ -1,13 +1,16 @@
--- G1 arena app state (without LÖVE): the smoke script outcome, the F5
--- debug tuning editor and recordings.
+-- Arena app state (without LÖVE): the smoke script outcomes of both
+-- arenas, the F5 debug tuning editor, F6/F7 (clarification C2) and
+-- recordings.
 
 local fs = require("tools.lib.fs")
+local levels = require("tools.lib.levels")
 local args = require("src.app.args")
 local arena_state = require("src.app.states.arena")
 local tuning_edit = require("src.app.tuning_edit")
 local tuning = require("src.sim.tuning")
 local replay = require("src.sim.replay")
 local sim = require("src.sim.sim")
+local serialize = require("src.core.serialize")
 
 local function ticks_of(checkpoints)
   local out = {}
@@ -25,8 +28,10 @@ local function frame_count(rec)
   return n
 end
 
-local function new_state()
-  local ctx = { quit_called = false, saved = {} }
+-- The G1 tests run in the G1 arena explicitly (clarification C4).
+local function new_state(arena)
+  local ctx = { quit_called = false, saved = {}, arena = arena or "g1_arena" }
+  ctx.read_level = levels.read_arena
   ctx.quit = function()
     ctx.quit_called = true
   end
@@ -43,19 +48,49 @@ describe("app.states.arena", function()
   it("ends the 120-tick smoke script with the outcome pinned for tools/smoke.sh", function()
     local st = new_state()
     for tick = 1, 120 do
-      st:tick(args.smoke_frame(tick))
+      st:tick(args.smoke_frame(tick, "g1_arena"))
     end
     local info = st:smoke_info()
     local line = ("p1=%s p2=%s hash=%s"):format(info.p1, info.p2, info.hash)
     local pinned = fs.read("tools/lib/smoke_expect.sh"):match('SMOKE_EXPECT_120="([^"]+)"')
     assert.are.equal(pinned, line)
+    assert.are.equal("p1=1408,2688 p2=1664,2652 hash=581f15d4", line) -- the G1 value
     assert.are.equal(4, st.counts.shots)
+    assert.are.equal("g1_arena", info.arena)
+  end)
+
+  it("ends the 120-tick terrain smoke script with its pinned outcome", function()
+    local st = new_state("g2_terrain")
+    local slide_ticks = 0
+    for tick = 1, 120 do
+      st:tick(args.smoke_frame(tick, "g2_terrain"))
+      if st.world.tanks[1].slide_dir then
+        slide_ticks = slide_ticks + 1
+      end
+    end
+    local info = st:smoke_info()
+    local line = ("p1=%s p2=%s hash=%s"):format(info.p1, info.p2, info.hash)
+    local pinned = fs.read("tools/lib/smoke_expect.sh"):match('SMOKE_EXPECT_G2_120="([^"]+)"')
+    assert.are.equal(pinned, line)
+    assert.are.equal("g2_terrain", info.arena)
+    -- what the script is for: P1 slides on ice, P2 digs brick point-blank
+    assert.is_true(slide_ticks >= 28)
+    assert.are.equal(6, st.counts.shots)
+    assert.is_true(st.counts.destroyed >= 8)
+  end)
+
+  it("opens the terrain arena by default", function()
+    local ctx = { saved = {}, read_level = levels.read_arena, quit = function() end }
+    local st = arena_state.new(ctx)
+    st:enter()
+    assert.are.equal("g2_terrain", st.arena_name)
+    assert.are.equal(4, #st.world.tanks)
   end)
 
   it("records live play as a replay that verifies against the committed tuning", function()
     local st, ctx = new_state()
     for tick = 1, 150 do
-      st:tick(args.smoke_frame(tick))
+      st:tick(args.smoke_frame(tick, "g1_arena"))
     end
     st:keypressed("f8")
     local rec = ctx.saved[1]
@@ -80,7 +115,7 @@ describe("app.states.arena", function()
     local st, ctx = new_state()
     local function play_to(n)
       while st.world.tick < n do
-        st:tick(args.smoke_frame(st.world.tick + 1))
+        st:tick(args.smoke_frame(st.world.tick + 1, "g1_arena"))
       end
     end
     play_to(150)
@@ -104,12 +139,12 @@ describe("app.states.arena", function()
   it("repeated saves at checkpoint boundaries give identical, verifying recordings", function()
     local st, ctx = new_state()
     for tick = 1, 120 do
-      st:tick(args.smoke_frame(tick))
+      st:tick(args.smoke_frame(tick, "g1_arena"))
     end
     st:keypressed("f8")
     st:keypressed("f8")
     for tick = 121, 180 do
-      st:tick(args.smoke_frame(tick))
+      st:tick(args.smoke_frame(tick, "g1_arena"))
     end
     st:keypressed("f8")
     local active = tuning.load()
@@ -132,7 +167,7 @@ describe("app.states.arena", function()
     _G.print = function(s)
       printed[#printed + 1] = s
     end
-    st:tick(args.smoke_frame(1))
+    st:tick(args.smoke_frame(1, "g1_arena"))
     local ok, err = pcall(st.keypressed, st, "f8")
     _G.print = real_print
     assert(ok, err)
@@ -140,7 +175,7 @@ describe("app.states.arena", function()
     assert.are.equal("REPLAY SAVE FAILED", st.save_status.text)
     assert.are.equal("arena: recording NOT saved: disk full", printed[1])
     for _ = 1, arena_state.SAVE_STATUS_TTL do
-      st:tick(args.smoke_frame(1))
+      st:tick(args.smoke_frame(1, "g1_arena"))
     end
     assert.is_nil(st.save_status) -- the HUD message expires
     assert.are.equal(1, #st.recording.frames) -- the live recording keeps going
@@ -148,7 +183,7 @@ describe("app.states.arena", function()
 
   it("quits on pause (Esc) like the G0 scene", function()
     local st, ctx = new_state()
-    local frame = args.smoke_frame(1)
+    local frame = args.smoke_frame(1, "g1_arena")
     frame[1].pause_pressed = true
     st:tick(frame)
     assert.is_true(ctx.quit_called)
@@ -159,7 +194,7 @@ describe("app.states.arena", function()
     local st, ctx = new_state()
     local committed = require("config.tuning").entries.player_speed[1]
     for _ = 1, 10 do
-      st:tick(args.smoke_frame(1))
+      st:tick(args.smoke_frame(1, "g1_arena"))
     end
     st:keypressed("f5")
     assert.is_true(st.edit.open)
@@ -168,7 +203,7 @@ describe("app.states.arena", function()
     assert.are.equal(0, st.world.tick) -- restarted with the modified copy
     assert.are.equal(committed + 1, st.world.tuning.player_speed)
     assert.are.equal(committed, tuning.load().values.player_speed) -- file untouched
-    st:tick(args.smoke_frame(1))
+    st:tick(args.smoke_frame(1, "g1_arena"))
     st:keypressed("f8")
     local rec = ctx.saved[1]
     assert.is_true(rec.debug_tuned)
@@ -182,7 +217,7 @@ describe("app.states.arena", function()
 
   it("ignores editor keys while the editor is closed", function()
     local st = new_state()
-    st:tick(args.smoke_frame(1))
+    st:tick(args.smoke_frame(1, "g1_arena"))
     st:keypressed("=")
     assert.is_false(st.edit:modified())
     assert.are.equal(1, st.world.tick)
@@ -262,5 +297,130 @@ describe("app.tuning_edit", function()
     assert.is_true(e:adjust(1))
     assert.are.equal(2, e.values.brick_strip_depth)
     assert.is_true(e:modified())
+  end)
+end)
+
+describe("app.states.arena F6 / F7 (clarification C2)", function()
+  local function play(st, n)
+    for _ = 1, n do
+      st:tick(args.smoke_frame(st.world.tick + 1, st.arena_name))
+    end
+  end
+
+  it("F7 cycles the level 0..3, restarts the arena and is not debug tuning", function()
+    local st, ctx = new_state("g2_terrain")
+    assert.are.equal(0, st.player_level)
+    play(st, 10)
+    st:keypressed("f7")
+    assert.are.equal(1, st.player_level)
+    assert.are.equal(0, st.world.tick) -- restarted
+    assert.are.same({ 1, 1 }, { st.world.tanks[1].level, st.world.tanks[2].level })
+    assert.are.equal(1, st.world.player_level)
+    for _ = 1, 3 do
+      st:keypressed("f7")
+    end
+    assert.are.equal(0, st.player_level) -- wrapped
+    st:keypressed("f7")
+    st:keypressed("f7")
+    st:keypressed("f7")
+    play(st, 5)
+    st:keypressed("f8")
+    local rec = ctx.saved[1]
+    assert.are.equal(3, rec.player_level)
+    assert.is_false(rec.debug_tuned)
+    assert.is_false(st.edit:modified())
+  end)
+
+  it("F2 keeps the arena, the F7 level and the F5 copy", function()
+    local st = new_state("g2_terrain")
+    st:keypressed("f7")
+    st:keypressed("f5")
+    st.edit.selected = 1
+    st:keypressed("=") -- player_speed + 1
+    play(st, 10)
+    st:keypressed("f2")
+    assert.are.same({ "g2_terrain", 1, 0 }, { st.arena_name, st.player_level, st.world.tick })
+    assert.is_true(st.edit:modified())
+    assert.are.equal(st.edit.values.player_speed, st.world.tuning.player_speed)
+  end)
+
+  it("F6 switches arenas and keeps the F7 level and the F5 copy", function()
+    local st = new_state("g2_terrain")
+    st:keypressed("f7")
+    st:keypressed("f7")
+    st:keypressed("f5")
+    st.edit.selected = 1
+    st:keypressed("=")
+    st:keypressed("f6")
+    assert.are.same({ "g1_arena", 2, 0 }, { st.arena_name, st.player_level, st.world.tick })
+    assert.are.equal(5, #st.world.tanks) -- the G1 arena's entities
+    assert.are.equal(2, st.world.tanks[1].level)
+    assert.is_true(st.edit:modified())
+    st:keypressed("f6")
+    assert.are.equal("g2_terrain", st.arena_name)
+  end)
+
+  it("respawned players get the F7 level", function()
+    local st = new_state("g2_terrain")
+    st:keypressed("f7")
+    st:keypressed("f7")
+    local p1 = st.world.tanks[1]
+    p1.level = 0 -- as if lost on death (G5); the respawn restores the world level
+    p1.hit_pending = true
+    st:tick(args.smoke_frame(1, "g2_terrain"))
+    st:tick(args.smoke_frame(2, "g2_terrain"))
+    assert.is_true(p1.present)
+    assert.are.equal(2, p1.level)
+  end)
+
+  it(
+    "an F5 change with any F7 level is debug_tuned and refused against committed tuning",
+    function()
+      local st, ctx = new_state("g2_terrain")
+      st:keypressed("f7")
+      st:keypressed("f5")
+      st.edit.selected = 1
+      st:keypressed("=")
+      play(st, 20)
+      st:keypressed("f8")
+      local rec = ctx.saved[1]
+      assert.is_true(rec.debug_tuned)
+      assert.are.equal(1, rec.player_level)
+      assert.is_nil((replay.run(rec, tuning.load(), { resolve_arena = levels.read_arena })))
+    end
+  )
+
+  it("F8 at level 3 in the terrain arena: repeated saves replay correctly", function()
+    local st, ctx = new_state("g2_terrain")
+    for _ = 1, 3 do
+      st:keypressed("f7")
+    end
+    play(st, 90)
+    st:keypressed("f8")
+    play(st, 30)
+    st:keypressed("f8")
+    local active = tuning.load()
+    local opts = { resolve_arena = levels.read_arena }
+    for i = 1, 2 do
+      local rec = ctx.saved[i]
+      assert.are.same({ "g2_terrain", 3 }, { rec.arena, rec.player_level })
+      assert.matches("^%x%x%x%x%x%x%x%x$", rec.arena_id)
+      assert.is_true(replay.verify(rec, active, opts))
+      -- survives the file round trip (serialize, decode)
+      local back = serialize.decode(serialize.encode(rec))
+      assert.is_true(replay.verify(back, active, opts))
+    end
+    assert.is_true(st.counts.destroyed > 0) -- the saves include destruction
+  end)
+
+  it("recordings in the G1 arena carry an arena_id too", function()
+    local st, ctx = new_state("g1_arena")
+    play(st, 30)
+    st:keypressed("f8")
+    local rec = ctx.saved[1]
+    assert.are.equal("g1_arena", rec.arena)
+    assert.matches("^%x%x%x%x%x%x%x%x$", rec.arena_id)
+    assert.are.equal(0, rec.player_level)
+    assert.is_true(replay.verify(rec, tuning.load()))
   end)
 end)
