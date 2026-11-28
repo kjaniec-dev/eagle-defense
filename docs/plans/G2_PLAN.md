@@ -114,7 +114,7 @@ When a bullet box overlaps at least one bullet-blocking cell after an advance (o
    - Steel and block cells there are untouched, unless the bullet has power (§6.3).
    - The bullet is consumed even when the strip contains no brick (for example a steel or block hit).
 
-The defaults are `brick_strip_cells = 2` and `brick_strip_depth = 1`: a ½-tile-wide, ¼-tile-deep strip, as in GAME_DESIGN §4.3. The bullet footprint (32 u) always lies inside the strip, because `|c − b| ≤ 32`. This holds for every bullet size up to 64 u, and the tuning schema enforces that bound (independent review P2-2, §19).
+The proposed defaults were `brick_strip_cells = 2` and `brick_strip_depth = 1`: a ½-tile-wide, ¼-tile-deep strip, as in GAME_DESIGN §4.3. After native playtesting the owner set **4 × 2** (1 tile wide, ½ tile deep), `TUNED (owner, 2026-11-28)` (§19, owner tuning). The bullet footprint (32 u) always lies inside the strip, because `|c − b| ≤ 32`. This holds for every bullet size up to 64 u, and the tuning schema enforces that bound (independent review P2-2, §19).
 
 A fired bullet's center is `t.x + 128` (or `t.y + 128`). An aligned tank (on the 128 u grid) therefore always shoots exactly on a cell boundary. Only a tank whose snap was blocked shoots off the boundary, and the tie rule covers that case.
 
@@ -122,7 +122,7 @@ A fired bullet's center is `t.x + 128` (or `t.y + 128`). An aligned tank (on the
 
 - A bullet has `power = true` when its shooter's upgrade level is ≥ `steel_break_level` (3; DOC: "a star 3 shot removes steel").
 - A non-power bullet that hits steel is consumed, and the steel is unchanged.
-- A power bullet removes every **steel** cell of each aligned 2 × 2 steel block (cells at even cell coordinates, which is ½ tile, the map-char granularity) that contains a steel cell of its strip in the impact row.
+- A power bullet removes every **steel** cell of each aligned 2 × 2 steel block (cells at even cell coordinates, which is ½ tile, the map-char granularity) that contains a steel cell of its **steel strip** in the impact row. The steel strip is centered like the brick strip but is always 2 cells wide, whatever `brick_strip_cells` is (owner tuning, §19).
   - A centered shot from an aligned tank straddles two blocks, so it removes 1 tile wide × ½ tile deep of steel (UNV, a direct consequence of "½-tile steel block" plus a centered strip).
   - The same power bullet also removes brick in its strip as in §6.2. Brick behavior does not depend on the upgrade level.
 - **Block (`X`) is never destroyed**, not even by power bullets.
@@ -208,8 +208,8 @@ Worked example (speed 7, distance 192, input "up" held on a large ice field, the
 
 | Key | Default | Tag | Validation |
 |---|---|---|---|
-| `brick_strip_cells` | 2 | UNV | 2 or 4 |
-| `brick_strip_depth` | 1 | UNV | 1 or 2 |
+| `brick_strip_cells` | 4 (proposed 2) | TUNED (owner, 2026-11-28) | 2 or 4 |
+| `brick_strip_depth` | 2 (proposed 1) | TUNED (owner, 2026-11-28) | 1 or 2 |
 | `steel_break_level` | 3 | DOC | 1..3 |
 | `ice_slide_distance` | 192 | UNV | 0..512 (0 disables sliding) |
 
@@ -296,7 +296,7 @@ Any state reachable in G1 therefore hashes exactly as before, which is what pres
 | # | Decision | Recommendation |
 |---|---|---|
 | G2-D1 | Terrain codes: keep G1 `X` as code 1 `block` (indestructible, arena-only, forbidden in campaign levels); the new types get codes 2–6; the hash extension rule (§10) | Approve. This keeps the G1 goldens and smoke byte-identical except for `tuning_id` |
-| G2-D2 | Brick strip 2 cells wide × 1 cell deep, centered on the nearest cell boundary (tie up/left), resolved simultaneously within a sub-step and within the spawn phase; depth removal stops at steel or block that the bullet cannot destroy (§6.2, §6.4, §6.5). Alternative: 4 cells wide (a tank-wide tunnel per row) | The 2 × 1 default from GAME_DESIGN, kept tunable; owner feel check natively |
+| G2-D2 | Brick strip 2 cells wide × 1 cell deep, centered on the nearest cell boundary (tie up/left), resolved simultaneously within a sub-step and within the spawn phase; depth removal stops at steel or block that the bullet cannot destroy (§6.2, §6.4, §6.5). Alternative: 4 cells wide (a tank-wide tunnel per row) | The 2 × 1 default from GAME_DESIGN, kept tunable; owner feel check natively. **Tuned to 4 × 2 by the owner on 2026-11-28 (§19); the steel strip stays 2 cells** |
 | G2-D3 | Steel: absorbs below level 3; a level-3 bullet removes the aligned 2 × 2 steel blocks touched by its strip (typically 1 tile × ½ tile); brick behavior is the same at all levels | Approve |
 | G2-D4 | Ice: the slide model in §7 (trigger, facing follows input, the end conditions, "on ice" = any ice cell under the box) with `ice_slide_distance = 192` u (UNV). Alternative for "on ice": the majority of the box's cells | Approve the model; the owner signs off the distance as `TUNED` after native play |
 | G2-D5 | Forest: presentation only, opaque in G2, drawn above tanks **and** bullets; the edge hint is G3 | Approve |
@@ -494,3 +494,9 @@ The owner approved G2-D1 … G2-D7 and authorized implementation with the six cl
 The architecture, batching, ice model, replay identity and G1 compatibility were accepted. Two bounded corrections, with no change to the approved destruction rules or tuning:
 - **P2-1, strict level arrays.** `map`, `dummies` and every record (the header, `roster`, a dummy entry) are validated without converting key types. An array must be exactly `t[1..n]`: no string keys such as `"1"`, no holes, no extra keys. A present `dummies` that is not a table (e.g. `false`) is an error. No entry is skipped silently.
 - **P2-2, bullet size bound.** `bullet_size` is limited to 8–64 u (default 32, unchanged), so the footprint always lies inside the 2-cell strip (§6.2). The tuning id is unchanged, because the schema is not part of it.
+
+### Owner tuning approval — brick destruction (2026-11-28)
+After native manual playtesting the owner approved `brick_strip_cells = 4` and `brick_strip_depth = 2`, both `TUNED (owner, 2026-11-28)`, shipped in PR #4 with the P2-1 and P2-2 corrections. Ice tuning (`ice_slide_distance`) stays UNV, pending its own approval.
+- **Brick:** a shot removes 4 cells (1 tile) × 2 cells (½ tile), centered as in §6.2. One point-blank shot opens a tank-wide passage through a ½-tile wall.
+- **Steel is preserved independently of the wider brick strip.** Power bullets use a fixed 2-cell **steel strip** (`destruction.STEEL_STRIP_CELLS`, a contract constant, not tuning), centered like the brick strip, so steel destruction is unchanged: 1 tile × ½ tile for an aligned shot, one ½-tile block when the strip falls inside one block. In the brick walk, removal in a column stops at the first bullet-blocking cell the impact does not remove, so brick behind steel that stays is never removed. With a 2 × 1 strip the results equal the previous rule (the rule tests pin 2 × 1 and pass unchanged).
+- **Goldens:** the tuning id changes (`1008b573` → `949c2b01`). The G1 goldens change only in `tuning_id`. The G2 goldens were re-authored with `tools/gen_g2_replay_inputs.lua` (the `brick_demolition` route adapted to the wider strip) and regenerated with `tools/update_goldens.lua`. The terrain smoke hash changes (`4b7aaef1` → `ac2a42a0`, positions unchanged); the G1 smoke hash `581f15d4` is unchanged.
