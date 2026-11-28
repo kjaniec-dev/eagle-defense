@@ -5,11 +5,19 @@
 -- destruction cells. Entity positions are in half-tiles.
 
 local units = require("src.sim.units")
+local terrain = require("src.sim.terrain")
+local hash = require("src.core.hash")
 
 local M = {}
 
 M.HALF = 26 -- half-tiles per side
-M.MAP_CHARS = { ["."] = 0, X = 1 } -- cell codes: 0 empty, 1 solid (indestructible)
+-- G1 config arenas know only empty and the indestructible block (terrain
+-- codes 0 and 1, G2-D1); level-format arenas use src/sim/level.lua.
+M.MAP_CHARS = { ["."] = terrain.CODE.empty, X = terrain.CODE.block }
+-- Arenas in the G1 config format (config/arenas/<name>.lua). Any other
+-- arena name is a level-format arena (levels/arenas/<name>.lua, G2 plan
+-- §11). tests/sim/data_spec.lua checks this list against config/arenas/.
+M.CONFIG = { g1_arena = true }
 M.KINDS = { player = true, target = true, turret = true }
 M.MAX_ENTITIES = 16
 
@@ -52,33 +60,6 @@ local function build_cells(map, problems)
     end
   end
   return cells
-end
-
--- True when the box [x, x+w) x [y, y+h) (in u) overlaps a solid cell.
-function M.box_hits_cells(cells, x, y, w, h)
-  local n, cs = units.CELLS, units.CELL
-  local c0, c1 = math.floor(x / cs), math.floor((x + w - 1) / cs)
-  local r0, r1 = math.floor(y / cs), math.floor((y + h - 1) / cs)
-  if c0 < 0 then
-    c0 = 0
-  end
-  if r0 < 0 then
-    r0 = 0
-  end
-  if c1 > n - 1 then
-    c1 = n - 1
-  end
-  if r1 > n - 1 then
-    r1 = n - 1
-  end
-  for r = r0, r1 do
-    for c = c0, c1 do
-      if cells[r * n + c + 1] ~= 0 then
-        return true, r * n + c + 1
-      end
-    end
-  end
-  return false
 end
 
 -- Validates arena data and converts it to simulation units. Returns
@@ -125,7 +106,7 @@ function M.build(data)
         y = e.y * HALF_U,
         facing = e.facing,
       }
-      if M.box_hits_cells(cells, ent.x, ent.y, units.TANK, units.TANK) then
+      if terrain.box_hits(cells, ent.x, ent.y, units.TANK, units.TANK, terrain.BLOCKS_TANKS) then
         problems[#problems + 1] = where .. ": overlaps a solid cell"
       end
       for j, o in ipairs(entities) do
@@ -147,10 +128,34 @@ function M.build(data)
   return { name = data.name, cells = cells, entities = entities }
 end
 
+-- True when `name` is a G1 config-format arena.
+function M.is_config(name)
+  return M.CONFIG[name] == true
+end
+
 -- Loads and validates config/arenas/<name>.lua.
 function M.load(name)
   assert(type(name) == "string" and name:match("^[%w_]+$"), "arena: invalid name")
+  assert(M.is_config(name), "arena: " .. name .. " is not a config arena")
   return M.build(require("config.arenas." .. name))
+end
+
+local KIND_CODE = { player = 1, target = 2, turret = 3 }
+
+-- Arena identity (G2 plan §14, clarification C3): 8-hex hash of a built
+-- battlefield's cells and entities (spawns and dummies). Replays record it;
+-- the runner refuses a replay whose id differs from the loaded arena.
+function M.id(built)
+  local h = hash.new()
+  h:int(#built.cells)
+  for i = 1, #built.cells do
+    h:int(built.cells[i])
+  end
+  h:int(#built.entities)
+  for _, e in ipairs(built.entities) do
+    h:int(KIND_CODE[e.kind]):int(e.slot or 0):int(e.x):int(e.y):int(units.DIRS[e.facing].code)
+  end
+  return h:hex()
 end
 
 return M

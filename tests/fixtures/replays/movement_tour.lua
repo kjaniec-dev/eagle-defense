@@ -162,6 +162,6 @@ return {
   },
   name = "movement_tour",
   seed = 1,
-  tuning_id = "348b3a6c",
+  tuning_id = "1008b573",
   tuning_version = 1,
 }

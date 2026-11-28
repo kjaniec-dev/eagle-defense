@@ -10,7 +10,9 @@ local M = {}
 
 local PROVENANCE = { UNV = true, DOC = true }
 
--- Schema: every key the G1 simulation reads, with its allowed range.
+-- Schema: every key the simulation reads, with its allowed range
+-- ({ min, max }), list length ({ list, min, max }) or allowed values
+-- ({ one_of = { ... } }).
 M.SCHEMA = {
   player_speed = { min = 1, max = 64 },
   bullet_speed_normal = { min = 1, max = 512 },
@@ -22,6 +24,11 @@ M.SCHEMA = {
   turret_first_shot = { min = 1, max = 100000 },
   turret_period = { min = 1, max = 100000 },
   turret_bullet_speed = { min = 1, max = 512 },
+  -- G2 terrain (G2 plan §9)
+  brick_strip_cells = { one_of = { 2, 4 } },
+  brick_strip_depth = { one_of = { 1, 2 } },
+  steel_break_level = { min = 1, max = 3 },
+  ice_slide_distance = { min = 0, max = 512 },
 }
 
 local function is_int(v)
@@ -60,6 +67,22 @@ function M.check_values(values)
             )
           end
         end
+      end
+    elseif rule.one_of then
+      local ok = false
+      for _, allowed in ipairs(rule.one_of) do
+        ok = ok or v == allowed
+      end
+      if not ok then
+        local names = {}
+        for i, allowed in ipairs(rule.one_of) do
+          names[i] = tostring(allowed)
+        end
+        problems[#problems + 1] = ("%s: one of %s expected, got %s"):format(
+          key,
+          table.concat(names, ", "),
+          tostring(v)
+        )
       end
     elseif not is_int(v) or v < rule.min or v > rule.max then
       problems[#problems + 1] = ("%s: integer in %d..%d expected, got %s"):format(

@@ -1,4 +1,4 @@
--- G1 combat tuning. Every value is an integer in simulation units
+-- Combat and terrain tuning (G1, G2). Every value is an integer in simulation units
 -- (1 tile = 256 u, see docs/TECHNICAL_DESIGN.md §2) or ticks (60 per second).
 --
 -- Each entry is { value, provenance, note }. Provenance tags:
@@ -50,5 +50,26 @@ return {
     turret_first_shot = { 60, "UNV", "G1 arena only: tick of the turret's first shot" },
     turret_period = { 120, "UNV", "G1 arena only: ticks between turret shots (limit 1)" },
     turret_bullet_speed = { 17, "UNV", "G1 arena only: turret bullet speed, normal" },
+    -- G2 terrain (docs/plans/G2_PLAN.md §9; GAME_DESIGN §4.1, §4.3)
+    brick_strip_cells = {
+      2,
+      "UNV",
+      "brick strip width in cells (2 = 1/2 tile), centered on the nearest cell boundary",
+    },
+    brick_strip_depth = {
+      1,
+      "UNV",
+      "brick strip depth in cells along the travel direction (1 = 1/4 tile)",
+    },
+    steel_break_level = {
+      3,
+      "DOC",
+      "upgrade level from which shots break steel in aligned 2 x 2 blocks (star 3)",
+    },
+    ice_slide_distance = {
+      192,
+      "UNV",
+      "ice slide distance in u (3/4 tile; 28 ticks at speed 7); 0 disables sliding",
+    },
   },
 }

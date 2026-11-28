@@ -227,7 +227,40 @@ describe("app.tuning_edit", function()
     for _, item in ipairs(tuning_edit.ITEMS) do
       local rule = tuning.SCHEMA[item.key]
       assert.is_truthy(rule, item.key)
-      assert.is_true(item.min >= rule.min and item.max <= rule.max, item.key)
+      if item.one_of then
+        assert.are.same(rule.one_of, item.one_of, item.key)
+      else
+        assert.is_true(item.min >= rule.min and item.max <= rule.max, item.key)
+      end
     end
+  end)
+
+  -- G2 clarification C2: F7 is the only level selector.
+  it("does not offer the players' upgrade level (F7 selects it)", function()
+    for _, item in ipairs(tuning_edit.ITEMS) do
+      assert.are_not.equal("arena_player_level", item.key)
+    end
+  end)
+
+  it("offers the G2 terrain keys; enumerated keys step through their allowed values", function()
+    local e = tuning_edit.new(tuning.load())
+    local pos = {}
+    for i, item in ipairs(tuning_edit.ITEMS) do
+      pos[item.key] = i
+    end
+    assert.is_truthy(pos.ice_slide_distance and pos.brick_strip_cells and pos.brick_strip_depth)
+    e.selected = pos.ice_slide_distance
+    assert.is_true(e:adjust(1))
+    assert.are.equal(200, e.values.ice_slide_distance) -- step 8
+    e.selected = pos.brick_strip_cells
+    assert.is_true(e:adjust(1))
+    assert.are.equal(4, e.values.brick_strip_cells)
+    assert.is_false(e:adjust(1)) -- clamped at the last allowed value
+    assert.is_true(e:adjust(-1))
+    assert.are.equal(2, e.values.brick_strip_cells)
+    e.selected = pos.brick_strip_depth
+    assert.is_true(e:adjust(1))
+    assert.are.equal(2, e.values.brick_strip_depth)
+    assert.is_true(e:modified())
   end)
 end)

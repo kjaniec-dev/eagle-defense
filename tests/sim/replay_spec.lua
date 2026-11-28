@@ -67,6 +67,32 @@ describe("golden replays", function()
     assert.is_true(c["shot"] >= 200 and c["tank_hit"] >= 10)
   end)
 
+  -- G2 plan §2, §9; clarification C5: G2 may change only the tuning_id of
+  -- the four approved G1 goldens. Their checkpoints must stay byte-identical
+  -- to the values frozen at c82ff86.
+  it("keeps every G1 checkpoint byte-identical to c82ff86 (only tuning_id changed)", function()
+    local frozen = require("tests.sim.g1_frozen_checkpoints")
+    for _, name in ipairs(NAMES) do
+      local r = load(name)
+      local got = {}
+      for i, cp in ipairs(r.checkpoints) do
+        got[i] = ("%d:%s"):format(cp[1], cp[2])
+      end
+      assert.are.same(frozen[name], got, name)
+      -- the recomputed checkpoints, not just the stored ones
+      local res = assert(replay.run(r, ACTIVE))
+      local again = {}
+      for i, cp in ipairs(res.checkpoints) do
+        again[i] = ("%d:%s"):format(cp[1], cp[2])
+      end
+      assert.are.same(frozen[name], again, name)
+      -- the legacy G1 header: no arena_id, no player_level
+      assert.is_nil(r.arena_id)
+      assert.is_nil(r.player_level)
+      assert.are.equal("g1_arena", r.arena)
+    end
+  end)
+
   it("refuses a replay recorded with a different tuning id", function()
     local r = load("movement_tour")
     r.tuning_id = "deadbeef"

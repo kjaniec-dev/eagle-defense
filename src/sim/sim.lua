@@ -1,12 +1,14 @@
 -- The simulation entry points: sim.new, sim.step (the only mutator) and
 -- sim.hash. Pure Lua (TECHNICAL_DESIGN §4, §5).
 --
--- Tick order: input -> AI (none in G1) -> tank movement -> bullet spawn ->
--- bullet phase -> removals -> respawns -> events.
+-- Tick order: input -> AI (none yet) -> tank movement (with ice) -> bullet
+-- spawn (muzzle destruction) -> bullet phase (destruction in (d)) ->
+-- removals -> respawns -> events.
 
 local world = require("src.sim.world")
 local move = require("src.sim.move")
 local bullets = require("src.sim.bullets")
+local destruction = require("src.sim.destruction")
 
 local M = {}
 
@@ -36,29 +38,30 @@ function M.step(w, frame)
   w.tick = w.tick + 1
   local tanks = w.tanks
 
-  -- Tank movement: players with a direction, in entity order.
+  -- Tank movement in entity order, including ice slides (G2 plan §7).
   for _, t in ipairs(tanks) do
     if t.present then
-      local input = input_for(frame, t)
-      if input.dir then
-        move.move_tank(w, t, input.dir, w.tuning.player_speed)
-      end
+      move.tank_tick(w, t, input_for(frame, t).dir, w.tuning.player_speed)
     end
   end
 
   -- Bullet spawn: one shot per fire press (no auto-repeat), turret schedule.
+  -- Muzzle impacts form one destruction batch, applied after the last tank
+  -- (clarification C1).
   local turret_now = turret_fires(w)
+  local batch = destruction.new_batch()
   for _, t in ipairs(tanks) do
     if t.present then
       if t.kind == "player" then
         if input_for(frame, t).fire_pressed then
-          bullets.try_fire(w, t)
+          bullets.try_fire(w, t, batch)
         end
       elseif t.kind == "turret" and turret_now then
-        bullets.try_fire(w, t)
+        bullets.try_fire(w, t, batch)
       end
     end
   end
+  destruction.apply(w, batch)
 
   bullets.phase(w)
 
@@ -71,6 +74,7 @@ function M.step(w, frame)
       t.present = false
       t.respawn_tick = w.tick + 1
       t.respawn_reported = false
+      move.clear_ice(t)
     end
   end
 
@@ -88,7 +92,8 @@ function M.step(w, frame)
         t.present = true
         t.respawn_tick = nil
         t.respawn_reported = false
-        t.level = w.tuning.arena_player_level
+        t.level = w.player_level
+        move.clear_ice(t)
         world.emit(w, { type = "tank_respawn", tank = t.id, x = t.x, y = t.y })
       end
     end
