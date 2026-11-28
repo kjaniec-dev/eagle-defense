@@ -222,8 +222,18 @@ local function check_header(data, profile, problems)
       problems[#problems + 1] = ("%s: unknown key %q"):format(profile, k)
     end
   end
-  if type(data.name) ~= "string" or not data.name:match("^[%w_]+$") or #data.name > 40 then
-    problems[#problems + 1] = "name: identifier expected (letters, digits, _; at most 40)"
+  if profile == "arena" then
+    -- an arena's name is its file name (levels/arenas/<name>.lua)
+    if type(data.name) ~= "string" or not data.name:match("^[%w_]+$") or #data.name > 40 then
+      problems[#problems + 1] = "name: identifier expected (letters, digits, _; at most 40)"
+    end
+  elseif
+    type(data.name) ~= "string"
+    or not data.name:match("^[%w][%w _'%-]*$")
+    or #data.name > 40
+  then
+    -- a campaign level's display name, e.g. "Opening Gate" (TECHNICAL_DESIGN §9)
+    problems[#problems + 1] = "name: 1..40 characters expected (letters, digits, space, _ ' -)"
   end
   if profile ~= "campaign" then
     return
@@ -316,6 +326,12 @@ local function read_dummies(list, cells, blocks, problems)
   if type(list) ~= "table" or #list > M.MAX_DUMMIES then
     problems[#problems + 1] = ("dummies: list of at most %d expected"):format(M.MAX_DUMMIES)
     return out
+  end
+  for _, k in ipairs(sorted_keys(list)) do
+    local n = tonumber(k)
+    if not n or not is_int(n) or n < 1 or n > #list then
+      problems[#problems + 1] = ("dummies: unexpected key %s (a list expected)"):format(k)
+    end
   end
   local markers = {}
   for _, ch in ipairs({ "1", "2", "E", "H" }) do

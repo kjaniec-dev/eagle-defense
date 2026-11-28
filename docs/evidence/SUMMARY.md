@@ -10,6 +10,7 @@ Branch `g2/battlefield`, from `main` `6e03a2f` (G1 merged), delivered as Draft P
 | HiDPI harness + mutation proof | SIMULATED HiDPI | **PASS** 8/8, 4/4 detected |
 | G2 mutation check | sandbox | **PASS** 29/29 detected (`docs/evidence/G2-mutations.md`) |
 | Native `make check`, smoke at 800x600 / 1024x640 / 1280x720, manual feel (brick, ice tuning) | **native** (owner) | **NOT RUN** (checklist: `docs/acceptance/G2-macos.md`) |
+| Internal pre-review (independent Opus reviewer, read-only) | review | **PASS**, no blockers; 2 should-fix + 1 nit fixed (see below) |
 | Independent review | independent review | **PENDING** |
 
 ## Contract amendments (recorded before any code, `5b85b8d`)
@@ -68,7 +69,7 @@ The generator is goal-driven, the G2 form of G1's distance-based authoring. It d
 
 All 8 goldens are also replayed in a second LuaJIT process and with 24 px and 32 px presentation, and they are refused under a different tuning or arena id.
 
-## Tests (`make test`: 409 successes, 0 failures)
+## Tests (`make test`: 411 successes, 0 failures)
 - `terrain_spec`: the code and property table, `box_hits`, the tuning additions (tags, `one_of`, ranges), the hash extension rule per field, invariant 9 and its runner.
 - `destruction_spec`:
   - the exact removed cells in 4 directions;
@@ -86,7 +87,7 @@ All 8 goldens are also replayed in a second LuaJIT process and with 24 px and 32
   - the contact (steel, water), off-ice and same-direction end conditions;
   - perpendicular and reverse triggers with facing, then normal movement on the next tick;
   - a shot during a slide; hit and respawn; distance 0; a single ice cell; the C6 snap-only regression.
-- `level_spec`: 4 valid fixtures and 30 invalid ones (one per rule); non-execution and size limits; character mapping; marker parsing; the battlefield shape; reachability; arena resolution; the validator tree check and the file-name checks.
+- `level_spec`: 4 valid fixtures and 33 invalid ones (one per rule); non-execution and size limits; character mapping; marker parsing; the battlefield shape; reachability; arena resolution; the validator tree check and the file-name checks.
 - `terrain_replay_spec`: the named behaviors above; arena identity (legacy accepted, mismatch and missing refused, a changed arena file refused, regeneration refuses both).
 - `arena_spec`, `args_spec`: both smoke pins against the pure sim; the default arena; F6, F7, F2 and F5 interplay (C2); the respawn level; F8 at level 3 in the terrain arena (two saves plus a file round trip); G1-arena recordings with `arena_id`.
 - `layout_spec`: the layer order, the forest split, exact 6 px and 8 px cells, the painter order through a stubbed `love.graphics`, forest drawn over a tank.
@@ -105,6 +106,15 @@ All 8 goldens are also replayed in a second LuaJIT process and with 24 px and 32
 - Smoke (Linux, Xvfb, llvmpipe): 8 × `SMOKE OK … problems=none`, both arenas at 1280x720, 1920x1080, 1366x768 and 800x600. The terrain smoke gives `p1=512,2688 p2=2304,3072 hash=4b7aaef1`: P1 slides on ice into the water column, and P2 digs its wall point-blank.
 - hidpi-sim (SIMULATED): 8/8 PASS, and `--mutations`: 4/4 detected.
 - Shell portability (sandbox emulation, **not native**): `tools/smoke.sh` and `tools/hidpi_sim.sh` also pass under an emulated macOS userland, as in PR #2: bash 3.2.57, Apple `od`, and `LANG=LC_ALL=pl_PL.UTF-8`. Smoke ran both arenas at the three macOS sizes (6 × `SMOKE OK`, the same hashes), and hidpi-sim was 8/8.
+
+## Internal pre-review (before the independent review)
+An independent Opus reviewer read the full diff against the plan and C1–C6. It found **no blockers** and confirmed the sim core, C1, ice and C6, the hash rule and C5, C3, the loader, the app (C2), the render order, the smoke and determinism, several points with scratch scripts. Fixed after the review, with tests:
+1. **Campaign `name`** was restricted to an identifier, which rejected TECHNICAL_DESIGN §9's own example `"Opening Gate"`. A campaign name is now a display name of 1–40 characters (letters, digits, space, `_ ' -`). Arena names stay identifiers, because they must equal the file name. New fixtures: `campaign_name`, `campaign_name_chars`, `arena_name`.
+2. **Hidden files under `levels/`** (Finder's `.DS_Store`, editor swap files) failed `make validate`, which would break the native `make check`. The validator now skips hidden files and still flags any other misplaced file (regression test with a temporary tree).
+3. **Keyed entries in `dummies`** were ignored silently; they are now rejected (fixture `arena_dummies_keyed`).
+4. Noted, not a defect, because the spec requires it (§6.6): for a muzzle hit whose spawn box spans two lines with blocking cells in both, `bullet_hit_solid.cell` now comes from the impact line instead of the whole footprint, as G1 did. Events are not hashed, so goldens and smoke are unaffected.
+
+The fixes touch only the level loader and validator. The mutation check (run at `4487626`) does not mutate those files.
 
 ## Not verified here
 - Nothing native has been run. Native rendering, smoke at the macOS sizes, feel (brick strip, ice distance), smoothness while destroying terrain, and F8 saves on the Mac are all for the owner (`docs/acceptance/G2-macos.md`).

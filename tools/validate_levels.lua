@@ -4,7 +4,8 @@
 -- G2 plan §11). Without arguments it checks every file under levels/ by
 -- its location: levels/NN.lua with the campaign profile (and id = NN),
 -- levels/arenas/<name>.lua with the arena profile (and name = <name>). Any
--- other file under levels/ is an error. Exits 1 on any problem.
+-- other file under levels/ is an error, except hidden files (.DS_Store,
+-- editor swap files), which are not shipped data. Exits 1 on any problem.
 
 package.path = "./?.lua;" .. package.path
 local fs = require("tools.lib.fs")
@@ -43,21 +44,30 @@ function M.check_file(path, profile, expect)
   return out
 end
 
--- Checks every file under levels/. Returns problems and the file count.
-function M.check_tree()
-  local problems, files = {}, fs.list_files("levels")
-  for _, path in ipairs(files) do
-    local profile, expect = levels.profile_of(path)
-    if not profile then
-      problems[#problems + 1] = path
-        .. ": not a level file location (levels/NN.lua or levels/arenas/<name>.lua)"
-    else
-      for _, p in ipairs(M.check_file(path, profile, expect)) do
-        problems[#problems + 1] = p
+-- True for hidden files (.DS_Store, editor swap files): not level data.
+function M.hidden(path)
+  return path:match("/%.[^/]*$") ~= nil
+end
+
+-- Checks every file under levels/ except hidden files. Returns problems
+-- and the number of files checked.
+function M.check_tree(dir)
+  local problems, n = {}, 0
+  for _, path in ipairs(fs.list_files(dir or "levels")) do
+    if not M.hidden(path) then
+      n = n + 1
+      local profile, expect = levels.profile_of(path)
+      if not profile then
+        problems[#problems + 1] = path
+          .. ": not a level file location (levels/NN.lua or levels/arenas/<name>.lua)"
+      else
+        for _, p in ipairs(M.check_file(path, profile, expect)) do
+          problems[#problems + 1] = p
+        end
       end
     end
   end
-  return problems, #files
+  return problems, n
 end
 
 local function main(argv)

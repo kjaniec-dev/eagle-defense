@@ -1,9 +1,9 @@
--- Test fixture (G2 plan §11, §15): name is not an identifier
--- expect: name: identifier expected
+-- Test fixture (G2 plan §11, §15): a name that is too long
+-- expect: name: 1..40 characters expected
 return {
   id = 7,
   env = "winter",
-  name = "two words",
+  name = "LongLongLongLongLongLongLongLongLongLongLong",
   roster = { basic = 12, fast = 4, power = 2, armor = 2 },
   map = {
     "EE..........EE..........EE",

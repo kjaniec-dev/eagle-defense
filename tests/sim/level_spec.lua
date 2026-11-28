@@ -161,6 +161,20 @@ describe("level loader", function()
     assert.are.equal(2, #sim.new({ arena = c, tuning = H.tuning() }).tanks)
   end)
 
+  -- Review finding: the campaign name is a display name ("Opening Gate",
+  -- TECHNICAL_DESIGN §9); only arena names must be identifiers.
+  it("accepts a campaign display name and keeps arena names identifiers", function()
+    local text = fs.read(DIR .. "valid/campaign_basic.lua")
+    local spaced = text:gsub('name = "fixture_campaign"', 'name = "Opening Gate"')
+    local built, problems = level.parse(spaced, "campaign")
+    assert.is_truthy(built, table.concat(problems or {}, "; "))
+    assert.are.equal("Opening Gate", built.name)
+    local arena_text = fs.read(DIR .. "valid/arena_basic.lua")
+      :gsub('"fixture_arena"', '"Opening Gate"')
+    local _, p2 = level.parse(arena_text, "arena")
+    assert.matches("name: identifier expected", p2[1])
+  end)
+
   it("reachability: brick is passable, steel and water block", function()
     local grid = {}
     for r = 0, 25 do
@@ -213,6 +227,28 @@ describe("arena selection and the validator", function()
     )
     assert.is_nil(levels.profile_of("levels/notes.lua"))
     assert.is_nil(levels.profile_of("levels/7.lua"))
+  end)
+
+  -- Review finding: a Finder .DS_Store under levels/ must not fail make validate
+  it("ignores hidden files but still flags other files outside the level locations", function()
+    assert.is_true(validate.hidden("levels/arenas/.DS_Store"))
+    assert.is_true(validate.hidden("levels/.01.lua.swp"))
+    assert.is_false(validate.hidden("levels/arenas/g2_terrain.lua"))
+    local dir = os.tmpname()
+    os.remove(dir)
+    os.execute("mkdir -p '" .. dir .. "/arenas'")
+    local function put(rel, text)
+      local f = assert(io.open(dir .. "/" .. rel, "wb"))
+      f:write(text)
+      f:close()
+    end
+    put("arenas/.DS_Store", "\0\0\0\1Bud1")
+    put("notes.txt", "x")
+    local problems, n = validate.check_tree(dir)
+    os.execute("rm -rf '" .. dir .. "'")
+    assert.are.equal(1, n) -- notes.txt only; .DS_Store is skipped
+    assert.are.equal(1, #problems)
+    assert.matches("notes.txt: not a level file location", problems[1])
   end)
 
   it("checks that a campaign file's id and an arena file's name match the file name", function()
