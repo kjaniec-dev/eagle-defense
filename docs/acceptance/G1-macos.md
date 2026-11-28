@@ -4,7 +4,7 @@ Fill this in on a real Mac, using a keyboard and, if available, a gamepad. Sandb
 
 **Status: PASS** (owner, 2026-11-27): automated gate, manual feel and art choice. Gamepad: NOT TESTED (optional, non-blocking). Final independent technical review: PASS. Merge of PR #3 authorized at the reviewed HEAD `c82ff864c96b4ab8497fc5ec307b023b2b14e58a`.
 
-Native artifacts: `native-evidence/g1-final-native-acceptance-c82ff86-2026-11-27/` (outside Git and `build/`; `SHA256SUMS` SHA-256 `74133cbf9bf61b019a731a6cb504209063fdfeecaadd057b0c779d754ce7aa99`; provenance in its `README.txt`). Summary: `docs/evidence/SUMMARY.md`, "Native acceptance".
+Native artifacts: `native-evidence/g1-final-native-acceptance-c82ff86-2026-11-27/` (outside Git and `build/`; `SHA256SUMS` SHA-256 `74133cbf9bf61b019a731a6cb504209063fdfeecaadd057b0c779d754ce7aa99`; provenance in its `README.txt`). Summary: `docs/evidence/G1.md` (until G2: `docs/evidence/SUMMARY.md`), "Native acceptance".
 
 ## Environment
 

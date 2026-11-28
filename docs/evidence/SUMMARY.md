@@ -1,145 +1,112 @@
-# G1 — core combat: evidence summary
+# G2 — battlefield, terrain and destruction: evidence summary
 
-Branch `g1/combat` from `main` `d3ccccf` (PR #2 merged). Plan: `docs/plans/G1_PLAN.md` v2, approved 2026-11-26, with decisions G1-D1..D5 and the three review clarifications (§13). Earlier summaries: `docs/evidence/G0.md`, `docs/evidence/PR2.md`.
+Branch `g2/battlefield`, from `main` `6e03a2f` (G1 merged), delivered as Draft PR #4. Plan: `docs/plans/G2_PLAN.md` v1.1, approved by the owner on 2026-11-28 with decisions G2-D1 … G2-D7 and clarifications C1–C6 (§19). Earlier summaries: `docs/evidence/G0.md`, `docs/evidence/PR2.md`, `docs/evidence/G1.md`.
 
 | Item | Evidence class | Status |
 |---|---|---|
-| Combat simulation, scenario tests, golden replays | sandbox (Linux arm64, LuaJIT) | **PASS** (see below) |
-| Real app in the arena, pixel-perfect smoke, same sim hash as the pure simulation | sandbox (Xvfb, Mesa llvmpipe) | **PASS** |
+| Terrain, destruction, ice, level loader and validator, replay identity, scenario tests, goldens | sandbox (Linux arm64, LuaJIT) | **PASS** (see below) |
+| G1 goldens: checkpoints byte-identical to `c82ff86`; G1 smoke `581f15d4` | sandbox | **PASS** |
+| Real app, both arenas, pixel-perfect smoke at 4 sizes, same sim hash as the pure simulation | sandbox (Xvfb, Mesa llvmpipe) | **PASS** 8/8 |
 | HiDPI harness + mutation proof | SIMULATED HiDPI | **PASS** 8/8, 4/4 detected |
-| BSD grep portability correction | sandbox + bash 3.2 emulation | **PASS** |
-| Visual spike (24 px vs 32 px concepts) | concept art, CPU-rendered, byte-deterministic | **DELIVERED**; owner approved **concept A** (24 px, 640×360) on 2026-11-27 |
-| Independent review corrections P2-1, P2-2 (`eb3123b`, `6f71f96`) | sandbox | **PASS** (see below) |
-| Owner tuning approval (player 7, bullets 17/34), goldens regenerated | sandbox | **PASS** (see below) |
-| Final independent technical review of `c82ff86` | independent review | **PASS** |
-| Native `make check`, smoke, HiDPI harness | **native** (Apple M3 Pro, Retina DPI 2.00) | **PASS** (see "Native acceptance") |
-| Native feel, F8 saves, art choice | native (owner, manual) | **PASS**; gamepad NOT TESTED (optional); concept A approved |
+| G2 mutation check | sandbox | **PASS** 29/29 detected (`docs/evidence/G2-mutations.md`) |
+| Native `make check`, smoke at 800x600 / 1024x640 / 1280x720, manual feel (brick, ice tuning) | **native** (owner) | **NOT RUN** (checklist: `docs/acceptance/G2-macos.md`) |
+| Independent review | independent review | **PENDING** |
 
-## Contract amendments (G1-D1, recorded before any code)
-TECHNICAL_DESIGN §2, §5, §6: 1 tile = 256 u; integer u/tick tuning; `px = floor(u × TILE_PX / 256)` in `src/render` only (`config/presentation.lua` is forbidden to `src/sim` by the boundary checker); tick order input → AI → movement → bullet spawn → sub-stepped bullet phase (advance, bullet vs bullet, bullet vs tank, bullet vs solids/bounds) → removals → respawns → events; clamp to contact; the alignment-based snap; the exact continuous bullet-vs-bullet test; simultaneous-hit rules; the reconciled respawn timing. GAME_DESIGN records the UNV assumptions (snap tie up/left, bullet size, point-blank shots, friendly bullets until G6, the arena §11).
+## Contract amendments (recorded before any code, `5b85b8d`)
+- TECHNICAL_DESIGN §5: destruction in the spawn phase and in step (d), each resolved as a batch against the batch-start terrain; ice in the movement phase; the hash extension rule; the world `player_level`.
+- TECHNICAL_DESIGN §6: the terrain property table, the strip, depth and steel rules, the ice rule, forest. §7: `arena_id`, `player_level`. §9: the level format, profiles and injected reader. §10: the G2 test layers.
+- GAME_DESIGN §4.1 (ice, UNV), §4.3 (brick, steel, water, forest, the `X` block), §8 (events), §10 (invariant 3 refined, new invariant 9), §11 (F7) and the new §12 terrain arena.
+- G2_PLAN §19 records clarifications C1–C6.
 
 ## Simulation (`src/sim/`)
-- Movement: instant start/stop, last-pressed direction from the G0 mapper, half-tile snap (≤ 64 u, ties up/left), collision-checked; a blocked snap turns in place and is retried on later ticks (clarification 1); reversing never snaps; clamp to contact against walls, bounds and tanks.
-- Shooting: one shot per press (no auto-repeat); limit 1 at levels 0–1 and 2 at levels 2–3; fast bullets from level 1; spawn centered on the front edge; muzzle obstruction resolved at once (opposing bullet → cancel, tank → hit, wall/bound → `bullet_hit_solid` without travel).
-- Bullet phase: `ceil(max speed / 64)` sub-steps, remainder first; bullet vs bullet uses the exact relative-motion test (clarification 3); every bullet overlapping a tank in a sub-step is consumed and the tank is hit once; bullets never hit their owner; same-faction bullets pass through.
-- Arena (`config/arenas/g1_arena.lua`, original): corridors, two 1-tile lanes, a block row with 1-tile gaps, two targets and a scheduled turret; arena-only respawn on the next tick, deferred while the spawn box is occupied (G1-D2, clarification 2).
-- Tuning (`config/tuning.lua`): integer values with provenance tags, tuning id = hash of the canonical form. Owner sign-off 2026-11-27: `player_speed` 7, `bullet_speed_normal` 17, `bullet_speed_fast` 34 are `TUNED (owner, 2026-11-27)`; the other values stay UNV/DOC.
+- **Terrain** (`terrain.lua`, G2-D1): codes 0 empty, 1 block (`X`, the G1 code), 2 brick, 3 steel, 4 water, 5 forest, 6 ice. The sim reads only the properties. Tank collision (movement, the collision-checked snap, invariants, spawn validation) tests `blocks_tanks`, and bullets test `blocks_bullets`.
+- **Destruction** (`destruction.lua`, G2-D2, G2-D3):
+  - the impact line is the one nearest the shooter;
+  - the strip is 2 cells centered on the nearest cell boundary, with ties going to the lower coordinate;
+  - depth stops at block, and at steel for non-power bullets;
+  - power bullets (level ≥ `steel_break_level`) remove aligned 2 × 2 steel blocks;
+  - block is never destroyed; a bound hit destroys nothing.
+- **Batches (C1).** The spawn phase and every (d) step are each one batch, resolved against the batch-start terrain. The union of the removals is applied. Each destroyed cell is reported once, for the first impact (tank order, or bullet order). Events: `bullet_hit_solid` gains `terrain`, plus a new `terrain_destroyed`.
+- **Ice** (in `move.lua`, G2-D4, C6): the slide rule as specified. `ice_dir` is armed only by an input move with forward displacement > 0 that ends on ice. A 0 u slide step (contact) ends the slide and uses that tick. A hit or respawn clears all ice state.
+- **World and hash:**
+  - `player_level` is the initial and respawn level. It is not hashed itself (C2).
+  - The new tank and bullet fields are hashed only when they are not at their defaults.
+  - `terrain_violations` implements invariant 9.
+- **Levels** (`level.lua`, G2-D6):
+  - a non-executing loader with a 32 KiB limit;
+  - the campaign and arena profiles;
+  - row-major 2 × 2 marker blocks;
+  - 4-neighbour reachability;
+  - `load_arena`: config arenas use the G1 loader; the others go through an injected reader.
+  - `tools/validate_levels.lua` is part of `make validate`.
+- **Replays** (G2-D7, C3):
+  - optional `arena_id` and `player_level` header fields;
+  - the runner refuses a mismatching `arena_id` in either format, and a level-format replay without one;
+  - legacy G1 headers stay valid;
+  - invariant 9 is asserted on every tick;
+  - `tools/update_goldens.lua` never writes `arena_id`.
+- **Terrain arena** (`levels/arenas/g2_terrain.lua`): original, arena profile, the zones of GAME_DESIGN §12. During authoring the `X` block was moved to rows 6–7, columns 18–19, so it is out of the line of fire at the ½-tile wall.
 
-## Tests
-- Scenario specs (`tests/sim/`): movement, shooting, bullet collisions, respawn, data; the no-overlap invariant is asserted on every tick of every scenario.
-- High-speed head-on cancellation over 11 × 11 speed pairs × 64 phase offsets; tunnelling through half-tile walls and tanks at up to 512 u/tick × 128 offsets; the sweep test against a brute-force reference (3000 random cases).
-- Golden replays (`tests/fixtures/replays/`): movement tour, shooting gallery, cancellation duel, 3600-tick stress run; each also checked for the behavior it is named for; identical in a second LuaJIT process and with 24 px and 32 px presentation; refused under a different tuning id. Generated by `tools/update_goldens.lua` (new fixtures in this PR; inputs authored by `tools/gen_g1_replay_inputs.lua`).
-- Mutation check of the key rules (each mutation run against `tests/sim/`):
+## G1 guarantees (C5)
+- **Golden regeneration (called out):** the four G1 goldens were regenerated with `tools/update_goldens.lua` for the tuning-id change only (`348b3a6c` → `1008b573`, from the four new tuning keys).
+  - The fixture diff is exactly one `tuning_id` line per file.
+  - Every checkpoint is byte-identical. `tests/sim/replay_spec.lua` compares the stored and the recomputed checkpoints with the `c82ff86` values frozen in `tests/sim/g1_frozen_checkpoints.lua`.
+  - The G1 headers keep no `arena_id` and no `player_level`.
+- The G1 smoke expectation is unchanged: `p1=1408,2688 p2=1664,2652 hash=581f15d4`, run with `--arena=g1_arena` explicitly.
+- Approved tuning is unchanged: 7 / 17 / 34, tagged `TUNED (owner, 2026-11-27)`.
+- **Scope of the claim:** it covers the approved goldens, the G1 smoke, and any state without the new fields. It does not cover every G1-reachable state. A player at level ≥ 3 now fires power bullets, which are hashed.
 
-| Mutation | Caught by |
-|---|---|
-| snap only when the facing changes | blocked-snap regression, lane entry |
-| swept-box overlap instead of the exact test | perpendicular regression, brute-force reference |
-| end-of-sub-step overlap only | head-on matrix, perpendicular, brute force |
-| snap ties go up | tie-break test, lane entry, goldens |
-| reject instead of clamp to contact | wall, bound and tank contact tests, goldens |
-| one `tank_hit` per bullet | two-bullets-one-tank test |
-| no sub-steps | tunnelling test, two-bullets test |
-| respawn before the bullet phase | spawn-box bullet regression |
-| first overlapping bullet wins regardless of faction (P2-2) | hostile + friendly (friendly first), several hostile bullets |
-| last hostile bullet wins (P2-2) | several hostile bullets |
+## New goldens (inputs from `tools/gen_g2_replay_inputs.lua`, checkpoints from `tools/update_goldens.lua`)
+The generator is goal-driven, the G2 form of G1's distance-based authoring. It drives a live simulation to asserted waypoints at the committed tuning. Every fixture records the terrain arena's `arena_id` (`8b30c45c`).
+
+| Golden | Ticks | Observed | Named-behavior check (`tests/sim/terrain_replay_spec.lua`) |
+|---|---|---|---|
+| `terrain_tour` | 1375 | slides ending by distance, at steel and water contact, and at the ice edge; no player shots; the turret digs 8 brick cells | ≥ 2 slides ending at contact, ≥ 1 at the ice edge, ≥ 2 by distance; forest crossed; contact with water, brick and steel; no tank hit |
+| `brick_demolition` (level 0) | 2277 | 43 shots, 62 brick cells in 32 `terrain_destroyed`, 7 muzzle impacts, target hit | ≥ 20 events; a same-tick P1 + P2 point-blank pair at one 1-cell wall; a tank inside cells that were brick; every brick event ≤ 2 cells |
+| `steel_and_power` (level 3) | 953 | 32 steel and 32 brick cells; the X block is shot 3 times | ≥ 16 steel cells; block count constant (16) on every tick; every brick event ≤ 2 cells |
+| `terrain_stress` (level 3, turret) | 3600 | 357 shots, 110 brick + 56 steel cells, 23 hostile + 19 friendly hits | ≥ 200 shots, ≥ 50 cells; invariants on every tick |
+
+All 8 goldens are also replayed in a second LuaJIT process and with 24 px and 32 px presentation, and they are refused under a different tuning or arena id.
+
+## Tests (`make test`: 409 successes, 0 failures)
+- `terrain_spec`: the code and property table, `box_hits`, the tuning additions (tags, `one_of`, ranges), the hash extension rule per field, invariant 9 and its runner.
+- `destruction_spec`:
+  - the exact removed cells in 4 directions;
+  - the tie case, and the nearest boundary versus the bullet's cell, using real blocked-snap shots;
+  - depth 2, width 4, clipping, a 2-cell hole;
+  - muzzle impacts, including a spawn box spanning two lines;
+  - simultaneous impacts in (d), from opposite sides and perpendicular, in both orders, with overlapping strips and the attribution;
+  - point-blank shots from both sides in the spawn phase; the next sub-step seeing the updated cells;
+  - tank + brick in one sub-step, cancellation over brick, destruction affecting movement from the next tick;
+  - steel at levels 0–2 and 3, one block or two, `steel_break_level`, block with power, brick behind steel at depth 2, mixed steel + brick precedence;
+  - no tunnelling through 1-cell brick and steel at 13 speeds (17 … 512 u/tick) × 64 offsets × 4 directions.
+- `terrain_movement_spec`: every tank-blocking type stops a tank at contact; forest and ice do not block; a snap into water turns the tank in place; bullets pass water, forest and ice; forest neutrality (identical positions and events with forest replaced by empty).
+- `ice_spec`:
+  - the distance, and movement on the trigger tick; no re-trigger;
+  - the contact (steel, water), off-ice and same-direction end conditions;
+  - perpendicular and reverse triggers with facing, then normal movement on the next tick;
+  - a shot during a slide; hit and respawn; distance 0; a single ice cell; the C6 snap-only regression.
+- `level_spec`: 4 valid fixtures and 30 invalid ones (one per rule); non-execution and size limits; character mapping; marker parsing; the battlefield shape; reachability; arena resolution; the validator tree check and the file-name checks.
+- `terrain_replay_spec`: the named behaviors above; arena identity (legacy accepted, mismatch and missing refused, a changed arena file refused, regeneration refuses both).
+- `arena_spec`, `args_spec`: both smoke pins against the pure sim; the default arena; F6, F7, F2 and F5 interplay (C2); the respawn level; F8 at level 3 in the terrain arena (two saves plus a file round trip); G1-arena recordings with `arena_id`.
+- `layout_spec`: the layer order, the forest split, exact 6 px and 8 px cells, the painter order through a stubbed `love.graphics`, forest drawn over a tank.
 
 ## App
-The boot state enters the arena (the G0 debug sandbox is removed). PLACEHOLDER rendering through the pure `render/layout`; F5 debug tuning editor (in-memory copy, restart on change, `TUNING MODIFIED`, recordings tagged `debug_tuned`); F2 restart; F8 saves the recording. Smoke drives the arena with a scripted 120-tick input; the SMOKE line reports positions and the sim hash, pinned in `tools/lib/smoke_expect.sh` against the pure simulation.
+- `love .` opens the terrain arena. `--arena=g1_arena|g2_terrain` selects one, and F6 switches.
+- F7 cycles the players' level 0–3 and restarts. It is recorded as `player_level` and is never debug tuning.
+- F5 no longer offers `arena_player_level`. It gains `ice_slide_distance` (step 8) and `brick_strip_cells` / `brick_strip_depth` (allowed values).
+- F2 keeps the arena, the level and the F5 copy. F8 recordings carry `arena`, `arena_id` and `player_level`.
+- PLACEHOLDER terrain rendering at cell resolution, with the forest layer above tanks and bullets. No new assets.
+- The SMOKE line gains `arena=<name>`. `tools/smoke.sh` runs both arenas at every size, each with its expectation (C4); `tools/hidpi_sim.sh` passes `--arena=g1_arena`.
 
-## Independent review corrections (review of `c188dbb`, 2026-11-27)
-- **P2-2, mixed-faction simultaneous hits** (`eb3123b`): when friendly and hostile bullets overlap one tank in the same sub-step, all are still consumed and the tank takes one effective hit, but that hit is now the first hostile bullet in bullet order; previously a friendly bullet listed first suppressed it. Recorded as clarification 4 (G1_PLAN §13, TECHNICAL_DESIGN §6, GAME_DESIGN). Regression tests: both insertion orders, several hostile bullets, friendly-only. No other collision priority changed; no G6 friendly-fire mechanics.
-- **P2-1, repeated F8 saves** (`6f71f96`): F8 saves `replay.snapshot` (an independent copy with a final checkpoint) instead of closing the live recording (`replay.finish` is removed). `src/app/replay_store.lua` writes `replays/arena-<date-time>-t<tick>.lua`, appends `-2`, `-3`, … instead of overwriting, and returns the failure reason for directory and write errors; the HUD shows `REPLAY SAVED` or `REPLAY SAVE FAILED`. Regression tests: save at 150, play to 200, save again (both verify, the live recording keeps grid checkpoints only); repeated saves at 120/120/180 and at tick 0; write and mkdir failures; earlier-session files untouched. Also exercised against the real `love.filesystem` under LÖVE 11.5 in the sandbox: two sessions gave `-t150`, `-2`, `-3`, `-4` with no overwrite, and a read-only directory returned `permission denied` instead of a path.
-- **Golden replays are unchanged** (`tools/update_goldens.lua --check`: all 4 up to date); none of them contains a mixed-faction hit in one sub-step. The smoke hash was unchanged by the corrections (`0c5c7a9c`; it changed afterwards with the owner tuning, see below).
-- Mutation check of the corrections (each run against the full suite):
+## Sandbox runs (`make check` at the final HEAD; see the evidence package)
+- Formatting and lint: PASS, 0 warnings / 0 errors. Shellcheck: OK.
+- Validate: boundaries, assets, DPI and levels: OK.
+- Smoke (Linux, Xvfb, llvmpipe): 8 × `SMOKE OK … problems=none`, both arenas at 1280x720, 1920x1080, 1366x768 and 800x600. The terrain smoke gives `p1=512,2688 p2=2304,3072 hash=4b7aaef1`: P1 slides on ice into the water column, and P2 digs its wall point-blank.
+- hidpi-sim (SIMULATED): 8/8 PASS, and `--mutations`: 4/4 detected.
+- Shell portability (sandbox emulation, **not native**): `tools/smoke.sh` and `tools/hidpi_sim.sh` also pass under an emulated macOS userland, as in PR #2: bash 3.2.57, Apple `od`, and `LANG=LC_ALL=pl_PL.UTF-8`. Smoke ran both arenas at the three macOS sizes (6 × `SMOKE OK`, the same hashes), and hidpi-sim was 8/8.
 
-| Mutation | Caught by |
-|---|---|
-| first overlapping bullet wins (the pre-fix rule) | `collision_spec` friendly-first case, several-hostile case |
-| a later hostile bullet replaces an earlier one | several-hostile case |
-| F8 closes the live recording (the pre-fix behavior) | `arena_spec` save 150 → 200, checkpoint-boundary case |
-| success reported regardless of the save result | `arena_spec` failed-write case |
-| write result ignored | `replay_store_spec` write failure |
-| directory result ignored | `replay_store_spec` mkdir failure |
-| existing file names reused | `replay_store_spec` earlier-session and give-up cases |
-
-## Owner tuning approval (2026-11-27)
-- `config/tuning.lua`: `player_speed` 6 → **7** u/tick (1.64 tiles/s); `bullet_speed_normal` **17** and `bullet_speed_fast` **34** unchanged in value. All three are tagged `TUNED (owner, 2026-11-27)`; every other value and tag is unchanged (pinned by a test in `tests/sim/data_spec.lua`). Tuning id `0d98355d` → `348b3a6c`. Recorded in GAME_DESIGN (Speeds, Bullet speed) and G1_PLAN §13.
-- **Golden replays regenerated** (all four), only through the approved tooling. A new tuning id requires new checkpoints (`luajit tools/update_goldens.lua`), but fixed tick counts would also move the players along different routes at speed 7. For example, `shooting_gallery` would no longer hit the target and `cancellation_duel` would no longer cancel anything. The input generator `tools/gen_g1_replay_inputs.lua` therefore now authors movement as distances converted to ticks at the committed speed, while waits and fire timings stay in ticks. `movement_tour` also gains an explicit 100-tick turret-clearance wait before P1 drives under the turret lane, because at speed 6 the old inputs avoided the turret only by timing. **This wait is an additional input change, separate from the distance conversion.** Reproduction at speed 6, re-verified at the closure (committed generator run with `player_speed` set to 6 in a scratch worktree, frames compared with the `c188dbb` fixtures):
-  - `shooting_gallery`, `cancellation_duel` and `stress_run`: inputs identical.
-  - `movement_tour`: the old input with exactly one 100-tick idle block inserted at tick 550 (1545 vs 1445 ticks); otherwise identical.
-  - So only the distance conversion, without the wait, reproduces all four previous inputs. Then `tools/update_goldens.lua` computed the checkpoints, and `--check` reports 4/4 up to date.
-- Route and behavior check, old (speed 6) against new (speed 7). The waypoints at segment ends agree within one speed step. Event counts:
-
-| Replay | Old (6) | New (7) |
-|---|---|---|
-| movement_tour | 12 shots, 11 solid hits, no tank hits | 11 shots, 11 solid hits, no tank hits |
-| shooting_gallery | 167 shots, 5 hostile + 13 friendly hits | 164 shots, 5 hostile + 11 friendly hits |
-| cancellation_duel | 32 shots, 7 cancels, 3 hits on the turret | 32 shots, 7 cancels, 3 hits on the turret |
-| stress_run (random input, unchanged) | 288 shots, 17 hostile + 11 friendly hits | 271 shots, 21 hostile + 8 friendly hits |
-
-- **Smoke expectation updated** in `tools/lib/smoke_expect.sh`: `p1=1408,2688 p2=1664,2652 hash=581f15d4` (was `p1=1384,2688 p2=1664,2712 hash=0c5c7a9c`); the 120-tick script itself is unchanged, and the unit test pins it against the pure simulation.
-- **Scenario tests now derive their expectations from the committed speed.** They no longer hard-code positions computed at 6 u/tick, so they prove the rules at 7. The rules and assertions are unchanged; setups that relied on one speed (wall and tank contact, blocked snap, respawn deferral) now place the tanks relative to the speed. To show that they test rules rather than one number, the movement, shooting, collision and respawn specs were also run with speeds 4, 5, 6, 8, 9, 13 and 16: all pass. Only the tests intentionally pinned to the committed values fail there (goldens, smoke expectation, tuning data).
-- The rule mutations were rerun at speed 7 against the rewritten tests, and all are still caught. They are: snap only on a facing change; ties snap to the higher coordinate; reject instead of clamp; respawn before the bullet phase.
-- Determinism guarantees are unchanged: no simulation code changed for the tuning. The goldens match in a second LuaJIT process and with 24 px and 32 px presentation.
-
-## Art direction spike (G1-D4, G1-D5)
-- `docs/art/mockups/`: `A-native.png` (640×360), `B-native.png` (768×432), `A-1920x1080.png` (3×), `B-1920x1080-integer.png` (2×, letterboxed), `B-1920x1080-fit.png` (2.5× sharp-bilinear), `compare-1920x1080.png`, `palette.gpl` (48 colours) and `README.md` (trade-offs, provenance, recommendation). SHA-256 per file is listed in that README.
-- Pipeline A (hand-authored, code-defined pixel art in `tools/mockup/`, rendered headless on the CPU by `make mockups`; two runs give byte-identical PNGs). Nothing is under `assets/`, `src/`, `config/` or `levels/`; the `.love` contains no `docs/` or `tools/` files (verified). The Blender MCP experiment was not used.
-- Authored by an Opus subagent and reviewed by the main agent on the rendered PNGs. Recommendation in the README: **A (24 px)** — exact integer scaling at 720p/1080p/1440p/4K and Steam Deck, lower asset cost; B's extra detail mostly pays off at 1440p/4K.
-- Honest assessment: brick, steel, water, HUD and lighting meet the concept bar; the tanks are readable but still somewhat generic, and the HQ eagle is busy at 24 px. The owner viewed the concepts and approved A (`docs/acceptance/G1-macos.md` §3).
-- Independent art review (2026-11-27): both native-resolution PNGs accepted as static concept deliverables, not final production art; preliminary recommendation A (24 px), final choice left to the owner's visual acceptance (the owner approved A on 2026-11-27; see below). Strengths: brick, steel, water, palette, HUD. For G3: more distinctive tank silhouettes, better turret and track design, a clearer original eagle emblem, less repetitive foliage, more convincing animated effects, better use of HUD space. **No external art commission yet:** G3 first explores AI-authored improvements and, if appropriate, the bounded Blender MCP pipeline. No art changes in this correction round.
-- **Owner decision (2026-11-27): concept A approved.**
-  - Internal canvas 640×360, 24 px tiles, battlefield 312×312 px; the simulation stays resolution-independent.
-  - This approves the presentation resolution and the concept direction, not final production art.
-  - The G3 improvement requirements above are preserved in ART_DIRECTION §3a.
-
-## Native acceptance (owner, 2026-11-27, HEAD `c82ff86`)
-Native host: Apple M3 Pro, macOS, Retina DPI 2.00, renderer `OpenGL / 4.1 Metal - 91.7 / Apple / Apple M3 Pro`. Checklist: `docs/acceptance/G1-macos.md`. **This evidence is native, recorded separately from the sandbox evidence above.**
-
-**Automated gate: PASS.**
-- Formatting: PASS.
-- Lint: 0 warnings / 0 errors in 98 files.
-- Shellcheck: PASS.
-- Busted: 283 / 0 / 0 / 0, golden replays included.
-- Boundaries: OK, 15 pure files.
-- Assets: OK.
-- DPI: OK, 30 files.
-- Smoke: 3/3 `SMOKE OK` at 800x600, 1024x640 and 1280x720. Each line is `ticks=120 state=arena p1=1408,2688 p2=1664,2652 hash=581f15d4`, with `mismatches=0`, `letterbox_bad=0` and `problems=none`.
-- HiDPI harness: 8/8 PASS on a real DPI-2 window (SIMULATED resource DPI; integer window overridden to 1280x720).
-- The BSD grep warning from PR #2 no longer occurs.
-- Exit code: the log ends with `make check exit=` and no value. No numeric exit code is recorded, and none is claimed; the terminal output reaches the successful final gate.
-
-**Cross-platform determinism.** The native sim hash `581f15d4` and positions equal the sandbox values, and the golden replays match natively. In the 640×360 smoke canvas, the decoded pixel-index data is identical to the sandbox canvas. 5 of the 23 palette entries differ by 1/255 in one or two channels (Metal vs llvmpipe float-to-8-bit rounding). This is not a gate: each platform compares its window against its own canvas.
-
-**Manual: PASS.**
-- Instant start and stop.
-- Turning and narrow corridor entry.
-- Normal and fast bullets.
-- Two active bullets at level 2.
-- Cancellation.
-- Smoothness.
-- Respawn after a hit.
-- Repeated F8 saves: five files in one session, at ticks 2159, 2269, 2346, 2360 and 2373.
-
-Gamepad: NOT TESTED (optional, non-blocking).
-
-**Preserved artifacts** (outside Git and `build/`, copied unchanged before any further sandbox run): `native-evidence/g1-final-native-acceptance-c82ff86-2026-11-27/`.
-
-| Path | Content |
-|---|---|
-| `run-a-make-check-2213/` | full `make check` log, smoke, harness |
-| `run-b-smoke-hidpi-2316/` | second smoke + harness run; no console log on disk |
-| `aborted-2212/` | an empty log |
-
-The folder's `README.txt` records the provenance; every file hash is listed in `docs/evidence/G1-native-macos.md`. Its `SHA256SUMS` has SHA-256 `74133cbf9bf61b019a731a6cb504209063fdfeecaadd057b0c779d754ce7aa99`. Key file hashes:
-
-| File | SHA-256 |
-|---|---|
-| `native-check.log` | `cf8c0f3d65437efbf93d757834dd791dae14e0071f6cd2e3b31627daaecdcd6d` |
-| smoke canvas (identical across all six smoke PNGs of both runs) | `bdcb578c3b7386c86a412f79ab8fcb817733b68a69d0a93cc244a3676a3ce4c3` |
-
-**Closure.** The final independent technical review is PASS, and the owner authorized merging PR #3 at `c82ff864c96b4ab8497fc5ec307b023b2b14e58a`. The closure commit on top of it changes documentation only.
-
-## Not changed
-No new runtime dependencies. CI stays disabled. No BMAD. No G2 work (terrain types, destruction). The pixel-density invariant and the toolchain layout are unchanged.
+## Not verified here
+- Nothing native has been run. Native rendering, smoke at the macOS sizes, feel (brick strip, ice distance), smoothness while destroying terrain, and F8 saves on the Mac are all for the owner (`docs/acceptance/G2-macos.md`).
+- `brick_strip_cells`, `brick_strip_depth` and `ice_slide_distance` stay **UNV** until the owner signs them off natively.
+- The "impact line nearest the shooter" rule only matters for a box spanning two lines with blocking cells in both. That can happen neither in flight nor at the muzzle: the muzzle's trailing line is inside the shooter's own cells, which never block tanks. It is therefore tested on the pure function, and through the muzzle case where only the far line holds brick.
