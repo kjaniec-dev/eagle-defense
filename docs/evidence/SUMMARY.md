@@ -8,10 +8,10 @@ Branch `g2/battlefield`, from `main` `6e03a2f` (G1 merged), delivered as Draft P
 | G1 goldens: checkpoints byte-identical to `c82ff86`; G1 smoke `581f15d4` | sandbox | **PASS** |
 | Real app, both arenas, pixel-perfect smoke at 4 sizes, same sim hash as the pure simulation | sandbox (Xvfb, Mesa llvmpipe) | **PASS** 8/8 |
 | HiDPI harness + mutation proof | SIMULATED HiDPI | **PASS** 8/8, 4/4 detected |
-| G2 mutation check | sandbox | **PASS** 29/29 detected (`docs/evidence/G2-mutations.md`) |
+| G2 mutation check | sandbox | **PASS** 34/34 detected (`docs/evidence/G2-mutations.md`) |
 | Native `make check`, smoke at 800x600 / 1024x640 / 1280x720, manual feel (brick, ice tuning) | **native** (owner) | **NOT RUN** (checklist: `docs/acceptance/G2-macos.md`) |
 | Internal pre-review (independent Opus reviewer, read-only) | review | **PASS**, no blockers; 2 should-fix + 1 nit fixed (see below) |
-| Independent review | independent review | **PENDING** |
+| Independent review of `fc0fedf` | independent review | Architecture, batching, ice, replay identity and G1 compatibility **accepted**; two P2 findings **fixed** in `b30e173` (see below). Final review **PENDING** |
 
 ## Contract amendments (recorded before any code, `5b85b8d`)
 - TECHNICAL_DESIGN §5: destruction in the spawn phase and in step (d), each resolved as a batch against the batch-start terrain; ice in the movement phase; the hash extension rule; the world `player_level`.
@@ -69,7 +69,7 @@ The generator is goal-driven, the G2 form of G1's distance-based authoring. It d
 
 All 8 goldens are also replayed in a second LuaJIT process and with 24 px and 32 px presentation, and they are refused under a different tuning or arena id.
 
-## Tests (`make test`: 411 successes, 0 failures)
+## Tests (`make test`: 418 successes, 0 failures)
 - `terrain_spec`: the code and property table, `box_hits`, the tuning additions (tags, `one_of`, ranges), the hash extension rule per field, invariant 9 and its runner.
 - `destruction_spec`:
   - the exact removed cells in 4 directions;
@@ -87,7 +87,7 @@ All 8 goldens are also replayed in a second LuaJIT process and with 24 px and 32
   - the contact (steel, water), off-ice and same-direction end conditions;
   - perpendicular and reverse triggers with facing, then normal movement on the next tick;
   - a shot during a slide; hit and respawn; distance 0; a single ice cell; the C6 snap-only regression.
-- `level_spec`: 4 valid fixtures and 33 invalid ones (one per rule); non-execution and size limits; character mapping; marker parsing; the battlefield shape; reachability; arena resolution; the validator tree check and the file-name checks.
+- `level_spec`: 4 valid fixtures and 43 invalid ones (one per rule); non-execution and size limits; character mapping; marker parsing; the battlefield shape; reachability; arena resolution; the validator tree check and the file-name checks.
 - `terrain_replay_spec`: the named behaviors above; arena identity (legacy accepted, mismatch and missing refused, a changed arena file refused, regeneration refuses both).
 - `arena_spec`, `args_spec`: both smoke pins against the pure sim; the default arena; F6, F7, F2 and F5 interplay (C2); the respawn level; F8 at level 3 in the terrain arena (two saves plus a file round trip); G1-arena recordings with `arena_id`.
 - `layout_spec`: the layer order, the forest split, exact 6 px and 8 px cells, the painter order through a stubbed `love.graphics`, forest drawn over a tank.
@@ -115,6 +115,22 @@ An independent Opus reviewer read the full diff against the plan and C1–C6. It
 4. Noted, not a defect, because the spec requires it (§6.6): for a muzzle hit whose spawn box spans two lines with blocking cells in both, `bullet_hit_solid.cell` now comes from the impact line instead of the whole footprint, as G1 did. Events are not hashed, so goldens and smoke are unaffected.
 
 The fixes touch only the level loader and validator. The mutation check (run at `4487626`) does not mutate those files.
+
+## Independent review corrections (review of `fc0fedf`, fixed in `b30e173`)
+The reviewer also compared all four G1 golden files with merged G1 independently and confirmed that only `tuning_id` changed.
+- **P2-1, strict level arrays** (`src/sim/level.lua`):
+  - key types are never converted;
+  - `map` and `dummies` must be exactly `t[1..n]`, so string keys such as `"1"`, holes and extra keys are rejected;
+  - the header, `roster` and dummy entries accept only their string field names;
+  - a present `dummies` that is not a table (`false`, a string) is an error;
+  - entries are read by index, never skipped by `ipairs`, and bad keys are reported in sorted order.
+  - 10 new invalid fixtures and 5 regression tests. Every valid level and the `g2_terrain` arena id `8b30c45c` are unchanged.
+- **P2-2, bullet size bound:**
+  - `bullet_size` is limited to 8–64 u (it was 128), matching the F5 editor, and the default stays 32.
+  - The footprint then always lies inside the 2-cell strip, and this is documented in TECHNICAL_DESIGN §2 and §6, GAME_DESIGN §4.2 and G2_PLAN §6.2 and §19.
+  - Tests: every size 8–64 × 64 offsets × 4 directions destroys all the brick it touches; 65, 96 and 128 u are rejected, with the 128 u geometry that motivated the bound.
+- **Unchanged:** the destruction rules, the approved tuning, the tuning id (`1008b573`, since the schema is not part of it), all 8 golden checkpoints (`update_goldens --check` 8/8) and both smoke hashes.
+- **Mutation proof:** 5 new mutations (rows 30–34), each detected; the full set of 34 was rerun at `b30e173`.
 
 ## Not verified here
 - Nothing native has been run. Native rendering, smoke at the macOS sizes, feel (brick strip, ice distance), smoothness while destroying terrain, and F8 saves on the Mac are all for the owner (`docs/acceptance/G2-macos.md`).
