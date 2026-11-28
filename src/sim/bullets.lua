@@ -1,13 +1,14 @@
--- Shooting and the bullet phase (TECHNICAL_DESIGN §5, §6).
+-- Shooting and the bullet phase (TECHNICAL_DESIGN §5, §6). Bullet vs
+-- terrain and destruction live in src/sim/destruction.lua.
 
 local units = require("src.sim.units")
 local geom = require("src.sim.geom")
-local arena = require("src.sim.arena")
+local destruction = require("src.sim.destruction")
 local world_mod = require("src.sim.world")
 
 local M = {}
 
-local T, F, MAX_SUBSTEP = units.TANK, units.FIELD, units.MAX_SUBSTEP
+local T, MAX_SUBSTEP = units.TANK, units.MAX_SUBSTEP
 local emit = world_mod.emit
 
 local function center(b)
@@ -38,6 +39,12 @@ function M.shot_speed(w, t)
   return tu.bullet_speed_normal
 end
 
+-- Power bullets break steel (G2-D3): a player shot at upgrade level >=
+-- steel_break_level.
+function M.shot_power(w, t)
+  return t.kind == "player" and t.level >= w.tuning.steel_break_level
+end
+
 -- Spawn box: centered on the tank's front edge, with the muzzle as the
 -- bullet's rear edge.
 function M.spawn_position(t, size)
@@ -51,10 +58,6 @@ function M.spawn_position(t, size)
     return t.x - size, t.y + off
   end
   return t.x + T, t.y + off
-end
-
-local function out_of_bounds(b)
-  return b.x < 0 or b.y < 0 or b.x + b.size > F or b.y + b.size > F
 end
 
 -- Applies a bullet hit on tank t. A bullet from the tank's own faction is
@@ -96,30 +99,6 @@ local function tank_at(w, b)
   end
 end
 
-local function solid_hit(w, b, at_spawn)
-  local kind
-  local _, cell = arena.box_hits_cells(w.cells, b.x, b.y, b.size, b.size)
-  if out_of_bounds(b) then
-    kind = "bound"
-  elseif cell then
-    kind = "solid"
-  else
-    return false
-  end
-  b.alive = false
-  local cx, cy = center(b)
-  emit(w, {
-    type = "bullet_hit_solid",
-    bullet = b.id,
-    kind = kind,
-    cell = kind == "solid" and cell or nil,
-    at_spawn = at_spawn,
-    x = cx,
-    y = cy,
-  })
-  return true
-end
-
 local function cancel(w, a, b)
   a.alive, b.alive = false, false
   local ax, ay = center(a)
@@ -136,8 +115,13 @@ end
 -- Fires from tank t if it is below its bullet limit. The new bullet is
 -- resolved at once against opposing bullets, then tanks, then solids and
 -- bounds (muzzle obstruction); only an unobstructed bullet joins the list.
+-- A muzzle impact destroys terrain like an in-flight impact (G2 plan §6.4).
+-- `batch` is the spawn phase's destruction batch (src/sim/destruction): its
+-- removals are applied when the spawn phase ends, so every muzzle impact of
+-- the phase sees the phase-start terrain (clarification C1). Without a
+-- batch, the removals are applied at once.
 -- Returns the bullet, or nil when the tank is at its limit.
-function M.try_fire(w, t)
+function M.try_fire(w, t, batch)
   if active_count(w, t.id) >= world_mod.bullet_limit(w, t) then
     return nil
   end
@@ -152,6 +136,7 @@ function M.try_fire(w, t)
     size = size,
     dir = t.facing,
     speed = M.shot_speed(w, t),
+    power = M.shot_power(w, t) or nil, -- nil (not false): only set when true
     alive = true,
   }
   w.next_bullet_id = w.next_bullet_id + 1
@@ -177,7 +162,13 @@ function M.try_fire(w, t)
     end
     return b
   end
-  if solid_hit(w, b, true) then
+  local own = batch == nil
+  batch = batch or destruction.new_batch()
+  local consumed = destruction.resolve(w, b, batch, true, emit)
+  if own then
+    destruction.apply(w, batch)
+  end
+  if consumed then
     return b
   end
   w.bullets[#w.bullets + 1] = b
@@ -207,7 +198,10 @@ function M.part(speed, k, n)
 end
 
 -- The bullet phase: n sub-steps of (a) advance, (b) bullet vs bullet,
--- (c) bullet vs tank, (d) bullet vs solids and bounds.
+-- (c) bullet vs tank, (d) bullet vs solids and bounds with destruction. In
+-- (d) every impact is calculated against the cells at the start of (d), and
+-- the union of the removals is applied after the last bullet (G2 plan §6.5,
+-- clarification C1); the next sub-step sees the updated cells.
 function M.phase(w)
   local list = w.bullets
   local n = M.substeps(w)
@@ -280,12 +274,14 @@ function M.phase(w)
         t.present = false
       end
     end
-    -- (d) solids and bounds
+    -- (d) solids and bounds, simultaneous destruction
+    local batch = destruction.new_batch()
     for _, b in ipairs(list) do
       if b.alive then
-        solid_hit(w, b, false)
+        destruction.resolve(w, b, batch, false, emit)
       end
     end
+    destruction.apply(w, batch)
   end
   for _, b in ipairs(list) do
     b.px, b.py = nil, nil

@@ -33,7 +33,7 @@ help:
 	@echo "fmt-check  verify formatting"
 	@echo "lint       luacheck + shellcheck"
 	@echo "test       busted unit/scenario tests (LuaJIT)"
-	@echo "validate   architecture boundaries + asset manifest"
+	@echo "validate   architecture boundaries + asset manifest + DPI audit + level files"
 	@echo "smoke      headless LÖVE run (Xvfb) with PNG capture"
 	@echo "hidpi-sim  SIMULATED HiDPI regression harness (integer + fit, DPI 1/1.25/1.5/2)"
 	@echo "love       build dist/eagle-defense.love from the committed HEAD (+ .sha256, .commit)"
@@ -81,6 +81,7 @@ validate:
 	$(LUAJIT) tools/check_boundaries.lua
 	$(LUAJIT) tools/check_assets.lua
 	$(LUAJIT) tools/check_dpi.lua
+	$(LUAJIT) tools/validate_levels.lua
 
 smoke:
 	./tools/smoke.sh $(SMOKE_TICKS) $(BUILD)/smoke.png

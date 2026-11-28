@@ -8,16 +8,20 @@ local tuning = require("src.sim.tuning")
 
 local M = {}
 
--- Editable entries: key, step and inclusive range.
+-- Editable entries: key with a step and inclusive range, or key with its
+-- allowed values (one_of). The players' upgrade level is not here: F7 is
+-- the only level selector (G2 clarification C2).
 M.ITEMS = {
   { key = "player_speed", step = 1, min = 1, max = 32 },
   { key = "bullet_speed_normal", step = 1, min = 1, max = 256 },
   { key = "bullet_speed_fast", step = 1, min = 1, max = 256 },
   { key = "bullet_size", step = 2, min = 8, max = 64 },
-  { key = "arena_player_level", step = 1, min = 0, max = 3 },
   { key = "fast_bullet_level", step = 1, min = 0, max = 3 },
   { key = "turret_period", step = 10, min = 10, max = 600 },
   { key = "turret_bullet_speed", step = 1, min = 1, max = 256 },
+  { key = "ice_slide_distance", step = 8, min = 0, max = 512 },
+  { key = "brick_strip_cells", one_of = { 2, 4 } },
+  { key = "brick_strip_depth", one_of = { 1, 2 } },
 }
 
 local Edit = {}
@@ -42,16 +46,28 @@ function Edit:select(delta)
   self.selected = (self.selected - 1 + delta) % n + 1
 end
 
--- Adjusts the selected value by delta steps, clamped to its range.
--- Returns true when the value changed.
+-- Adjusts the selected value by delta steps, clamped to its range (or to
+-- the ends of its allowed values). Returns true when the value changed.
 function Edit:adjust(delta)
   local item = M.ITEMS[self.selected]
   local old = self.values[item.key]
-  local v = old + delta * item.step
-  if v < item.min then
-    v = item.min
-  elseif v > item.max then
-    v = item.max
+  local v
+  if item.one_of then
+    local pos = 1
+    for i, allowed in ipairs(item.one_of) do
+      if allowed == old then
+        pos = i
+      end
+    end
+    pos = math.max(1, math.min(#item.one_of, pos + delta))
+    v = item.one_of[pos]
+  else
+    v = old + delta * item.step
+    if v < item.min then
+      v = item.min
+    elseif v > item.max then
+      v = item.max
+    end
   end
   self.values[item.key] = v
   assert(tuning.check_values(self.values))

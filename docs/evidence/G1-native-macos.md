@@ -1,6 +1,6 @@
 # G1 — native macOS acceptance artifacts (`c82ff86`, 2026-11-27)
 
-These are the native artifacts of the owner's G1 acceptance runs. They are **native evidence**, kept separate from the sandbox evidence. The analysis is in `docs/evidence/SUMMARY.md`, under "Native acceptance". The filled checklist is `docs/acceptance/G1-macos.md`.
+These are the native artifacts of the owner's G1 acceptance runs. They are **native evidence**, kept separate from the sandbox evidence. The analysis is in `docs/evidence/G1.md` (the G1 summary; it was `docs/evidence/SUMMARY.md` until G2), under "Native acceptance". The filled checklist is `docs/acceptance/G1-macos.md`.
 
 The files are stored outside Git and outside `build/`, in `native-evidence/g1-final-native-acceptance-c82ff86-2026-11-27/`. They were copied unchanged (`cp -p`) from the owner's `build/` before any further sandbox run, and `make evidence` copies them into the evidence package. The provenance of each folder is in the folder's `README.txt`:
 

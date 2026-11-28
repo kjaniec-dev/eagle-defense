@@ -73,7 +73,8 @@ run_case() {
   local base="$dir/$mode-dpi$scale"
   local log="$base.log" canvas="$base.png" window="$base-window.png"
   local ref="$dir/$mode-dpi1"
-  local run=("$LOVE" "$ROOT/tools/hidpi_sim" "--smoke=$TICKS" "--window=$size" "--scale-mode=$mode"
+  # The harness runs the G1 smoke explicitly (G2 clarification C4).
+  local run=("$LOVE" "$ROOT/tools/hidpi_sim" "--smoke=$TICKS" "--arena=g1_arena" "--window=$size" "--scale-mode=$mode"
     "--smoke-out=$canvas" "--smoke-window-out=$window")
   local code labels=() line problems expected_probe dims
   rm -f "$log" "$canvas" "$window"
@@ -98,7 +99,7 @@ run_case() {
     while IFS= read -r l; do [[ -n "$l" ]] && labels+=("$l"); done < <(labels_for_problems "$problems")
     [[ "$line" == "SMOKE OK "* ]] || [[ ${#labels[@]} -gt 0 ]] || labels+=("other-check")
     [[ "$line" == *" logical=$size "* ]] || labels+=("window-size-not-applied")
-    [[ "$line" == *"ticks=$TICKS "*" $SMOKE_EXPECT_120 "* ]] || labels+=("tick-or-markers")
+    [[ "$line" == *"ticks=$TICKS "*" $SMOKE_EXPECT_120 arena=g1_arena "* ]] || labels+=("tick-or-markers")
   fi
   [[ $code -eq 0 ]] || [[ ${#labels[@]} -gt 0 ]] || labels+=("exit-$code")
   if [[ -s "$canvas" ]]; then

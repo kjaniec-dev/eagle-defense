@@ -1,6 +1,6 @@
 # Eagle Defense — Game Design v1.0
 
-Status: **APPROVED v1.0** (owner, 2026-11-26). Changes to rules or invariants require owner approval.
+Status: **APPROVED v1.0** (owner, 2026-11-26), amended by G2-D1 … G2-D7 (owner-approved 2026-11-28: §4.1 ice, §4.3 terrain, §8 events, §10 invariants, §12 terrain arena). Changes to rules or invariants require owner approval.
 
 ## 1. Pillars
 
@@ -42,7 +42,7 @@ Units: **tiles** = playfield tiles (the playfield is 13×13 tiles). **cells** = 
 | Reversing | Reversing is instant, with no snap | CC | Same |
 | Simultaneous directions | Unknown | UNV | **Last-pressed direction wins**, so a released key restores the remaining held key. This is deterministic and testable. |
 | Speeds | Player ≈ basic enemy; fast enemy ≈ 2× basic | Player: TUNED (owner, 2026-11-27); enemies: UNV | Data-driven values, stored as integer u/tick in `config/tuning.lua` (1 tile = 256 u). Player **7 u/tick = 1.64 tiles/s**, signed off by the owner after G1 playtesting (the placeholder was 6 u/tick = 1.41 tiles/s); this is subjective feel tuning, not a reference measurement. Enemy placeholders (tiles/s): basic 0.70, fast 1.40, power 1.05, armor 0.70, tuned in G4. |
-| Ice | The tank slides a short distance after input stops or turns | CC (duration UNV) | Slide of ≈ ½–1 tile, calibrated in G2 |
+| Ice | The tank slides a short distance after input stops or turns | CC (duration UNV) | G2-D4: on ice (any ice cell under the tank), after an input move that went forward, an input that stops, turns or reverses starts a slide in the last move direction. The slide moves at the tank's speed for `ice_slide_distance` = **192 u (¾ tile, 28 ticks ≈ 0.47 s at speed 7), UNV** until the owner signs it off natively. The facing follows the input during the slide. It ends at the distance, at contact, off ice, or on an input equal to the slide direction, and never retriggers itself. A snap-only move does not arm it. The rule and the distance are **UNV** (assumptions, not reference facts); exact rule: TECHNICAL_DESIGN §6. |
 | Tank vs tank | Tanks block each other. Overlap is resolved by refusing the move. | CC | Same, as clamp-to-contact: a move stops exactly at the blocking tank, wall or bound (G1-D1). Tanks spawning inside other tanks may move out (§4.5). |
 
 ### 4.2 Shooting
@@ -51,7 +51,7 @@ Units: **tiles** = playfield tiles (the playfield is 13×13 tiles). **cells** = 
 |---|---|---|---|
 | Shot limit | 1 active player bullet at star 0–1, and 2 at star 2+ | DOC (star 2) | Same |
 | Firing | Fires as soon as a slot is free; there is no cooldown beyond that | CC | Same. A held fire button does **not** auto-repeat; this is an assumption, see Q4. |
-| Bullet speed | Normal and fast (star 1+ and the Power enemy) | DOC (qualitative); values TUNED (owner, 2026-11-27) | Normal **17 u/tick = 3.98 tiles/s**, fast **34 u/tick = 7.97 tiles/s**, signed off by the owner after G1 playtesting (subjective feel tuning, not a reference measurement). The G1 turret's bullet speed (17) stays UNV. Bullet size 32 × 32 u (⅛ tile) is **UNV**. |
+| Bullet speed | Normal and fast (star 1+ and the Power enemy) | DOC (qualitative); values TUNED (owner, 2026-11-27) | Normal **17 u/tick = 3.98 tiles/s**, fast **34 u/tick = 7.97 tiles/s**, signed off by the owner after G1 playtesting (subjective feel tuning, not a reference measurement). The G1 turret's bullet speed (17) stays UNV. Bullet size 32 × 32 u (⅛ tile) is **UNV**; it is tunable within 8–64 u, so that a bullet always fits inside its brick strip (G2 review P2-2). |
 | Bullet vs bullet | Opposing bullets cancel each other | CC | Player and enemy bullets cancel. Bullets from the same faction pass through each other (UNV). |
 | Point-blank shot | Unknown | UNV | A bullet whose spawn box (on the tank's front edge) already overlaps something resolves at once: opposing bullet → cancel, tank → hit, wall or bound → `bullet_hit_solid` without travel (G1). |
 | Friendly bullet (G1) | A hit stuns the partner (see §4.6) | CC | Until the stun arrives in G6, a player bullet that reaches the other player is consumed and reported as a friendly `tank_hit` with no other effect. If a hostile bullet hits the same player in the same sub-step, the hostile hit is the one that counts. |
@@ -62,12 +62,13 @@ Units: **tiles** = playfield tiles (the playfield is 13×13 tiles). **cells** = 
 
 | Terrain | Tanks | Bullets | Conf. | Proposal |
 |---|---|---|---|---|
-| Brick | Block | A hit removes a half-tile-wide, ¼-tile-deep strip in the direction of travel | CC (granularity UNV) | Same, using cell resolution. A tile is a 4×4 cell grid. A shot removes 2 cells wide × 1 cell deep, centered on the bullet axis. |
-| Steel | Block | Steel absorbs the bullet. A star 3 shot removes a ½-tile steel block. | DOC (star 3) | Same. Steel granularity is 2×2 cells. |
-| Water | Block | Pass over | CC | Same |
-| Forest | Pass; hides tanks | Pass | CC | Same. Forest is drawn above tanks. Not destructible: Q5 (some variants clear it at star 3). |
-| Ice | Pass, slippery | Pass | CC | Same |
-| Headquarters | Blocks | Any hit destroys it, which means game over | CC | Same |
+| Brick | Block | A hit removes a half-tile-wide, ¼-tile-deep strip in the direction of travel | CC (granularity UNV) | Same, using cell resolution. A tile is a 4×4 cell grid. G2-D2: a shot removes `brick_strip_cells` × `brick_strip_depth` cells: **4 cells (1 tile) wide × 2 cells (½ tile) deep, TUNED (owner, 2026-11-28)** after native playtesting (the G2-D2 proposal was 2 × 1, a reading of the classic ½ × ¼ tile; 2 and 1 remain F5 values), centered on the cell boundary nearest the bullet's center (ties up/left, **UNV**), starting at the brick line nearest the shooter. Depth removal stops at steel (unless the bullet has power) or block. Muzzle impacts (a tank touching the wall) destroy brick too. Simultaneous impacts are resolved together, so no bullet passes through a hole another bullet makes in the same step. |
+| Steel | Block | Steel absorbs the bullet. A star 3 shot removes a ½-tile steel block. | DOC (star 3) | Same. Steel granularity is 2×2 cells. G2-D3: below `steel_break_level` = 3 (DOC) steel absorbs the bullet unchanged; a level-3 bullet removes every aligned 2 × 2 steel block touched by its **steel strip** in the impact line, typically 1 tile × ½ tile (a consequence of the centered strip, **UNV**). The steel strip is a fixed 2 cells (½ tile), independent of `brick_strip_cells`, so the wider brick strip never widens steel destruction. Brick behavior does not depend on the level. |
+| Water | Block | Pass over | CC | Same. A snap that would overlap water is blocked and turns the tank in place. |
+| Forest | Pass; hides tanks | Pass | CC | Same. Forest is drawn above tanks **and bullets** and has no simulation effect (G2-D5). Not destructible: Q5 (some variants clear it at star 3). The G2 placeholder is fully opaque; the edge hint is G3 art. |
+| Ice | Pass, slippery | Pass | CC | Same (slide rule in §4.1) |
+| Headquarters | Blocks | Any hit destroys it, which means game over | CC | Same (G4; G2 parses and validates the `H` marker only) |
+| Test block `X` | Block | Consumed | — | G1 indestructible test block, kept as terrain code 1 (G2-D1). Never destroyed, not even by power bullets. Allowed in test arenas only, never in campaign levels. |
 
 ### 4.4 Enemies
 
@@ -142,6 +143,8 @@ All bindings will be rebindable in G8.
 
 The simulation emits **events**: shot, hit_brick, hit_steel, tank_destroyed, hq_destroyed, powerup_spawned, powerup_taken, spawn, stage_clear, game_over, player_stunned. Audio and VFX react only to these events and never change gameplay state.
 
+G2-D6 event names: `hit_brick` / `hit_steel` are `bullet_hit_solid` (with `terrain` = `steel` > `brick` > `block`, the highest-precedence type under the bullet in its impact line) and `terrain_destroyed { bullet, terrain = "brick" | "steel", cells }`. `terrain_destroyed` is emitted per impact and per terrain type that lost at least one cell, brick before steel, with the cells in ascending order; a cell destroyed by several simultaneous impacts is reported once, for the first impact in tank order (spawn phase) or bullet order (in flight) (G2 clarification C1).
+
 ## 9. Fidelity decisions
 
 On 2026-11-26 the owner accepted the defaults below. Each one can be reopened by the owner.
@@ -164,12 +167,13 @@ On 2026-11-26 the owner accepted the defaults below. Each one can be reopened by
 
 1. The simulation advances only in fixed 1/60 s ticks. Rendering never changes simulation state.
 2. Identical seed plus input sequence produces an identical state hash on every tick, on every platform.
-3. A tank never overlaps a solid tile or another tank after a tick has resolved, apart from the documented spawn-overlap exception.
+3. A tank never overlaps a tank-blocking cell (block, brick, steel, water), a bound or another tank after a tick has resolved, apart from the documented spawn-overlap exception.
 4. Each tank has at most N active bullets, where N comes from its upgrade level.
 5. At most one power-up exists on the field at a time.
 6. There are exactly 20 enemies per stage (from the level roster). Each is spawned once and removed once.
 7. HQ destruction ends the stage as a loss within the same tick.
 8. Destruction state is stored at cell resolution only. There is no floating-point geometry.
+9. Terrain changes only by destruction: a cell goes from brick or steel to empty and never back (G2). Asserted every tick in scenarios and replays. The G5 shovel will amend this invariant.
 
 ## 11. G1 test arena (not a campaign level)
 
@@ -177,4 +181,8 @@ The G1 arena (`config/arenas/g1_arena.lua`) exists only to tune and verify comba
 - **Target dummies** are static tank-sized targets in the enemy faction. A hit consumes the bullet and is counted; dummies are never destroyed.
 - **Turret dummy:** a static enemy-faction target that fires one bullet (limit 1) on a fixed tick schedule down a lane, so cancellation can be practised. No AI.
 - **Arena respawn** (G1-D2): a hit player respawns at its spawn point on the next tick; it is deferred while any tank occupies the spawn box. Lives arrive in G5.
-- Player upgrade level for testing bullet limits and speeds is an arena tuning value (`arena.player_level`), changed through the F5 debug tuning overlay.
+- Player upgrade level for testing bullet limits and speeds: in G1 the tuning value `arena_player_level`, changed through F5. From G2 it is selected with **F7** (0–3, recorded in replays as `player_level`), and F5 no longer offers it (G2 clarification C2).
+
+## 12. G2 terrain test arena (not a campaign level)
+
+The terrain arena (`levels/arenas/g2_terrain.lua`, arena profile) exists only to verify and tune terrain behavior. It is original and drawn from scratch; no reference map was traced. It has brick walls ½, 1 and 2 tiles thick with partial-brick shapes and a target dummy behind them; a steel band with brick behind it (power bullets open it, normal bullets do not); an `X` block; a turret firing across water and through forest into brick (enemy-faction destruction); a water channel with a 1-tile gap; a forest patch over a lane crossing; an ice field ending at steel (slide to contact), at water (slide stop at contact) and at plain ground (slide ends off ice); P1 spawns below the ice and P2 below a brick wall it can shoot point-blank. `love .` opens it by default; `--arena=` and **F6** switch between it and the G1 arena; **F7** selects the players' upgrade level. Like the G1 arena, it has no HQ, enemies, lives or score.

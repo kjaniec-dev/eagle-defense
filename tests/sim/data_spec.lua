@@ -4,6 +4,7 @@ local units = require("src.sim.units")
 local tuning = require("src.sim.tuning")
 local hash = require("src.core.hash")
 local arena = require("src.sim.arena")
+local terrain = require("src.sim.terrain")
 local sim = require("src.sim.sim")
 local boundaries = require("tools.lib.boundaries")
 local H = require("tests.sim.helpers")
@@ -164,7 +165,7 @@ describe("arena data", function()
     assert.are.same({ 1024, 3072 }, { a.entities[1].x, a.entities[1].y })
     -- lane in tile column 6, rows 4-5: free, with solid neighbours
     local function solid_at(tx, ty)
-      return (arena.box_hits_cells(a.cells, tx * 256, ty * 256, 256, 256))
+      return (terrain.box_hits(a.cells, tx * 256, ty * 256, 256, 256, terrain.BLOCKS_TANKS))
     end
     for _, ty in ipairs({ 4, 5 }) do
       assert.is_false(solid_at(6, ty))
@@ -172,6 +173,40 @@ describe("arena data", function()
       assert.is_false(solid_at(10, ty))
       assert.is_true(solid_at(9, ty) and solid_at(11, ty))
     end
+  end)
+
+  it("lists exactly the config arenas under config/arenas/ as G1-format arenas", function()
+    local fs = require("tools.lib.fs")
+    local names = {}
+    for _, path in ipairs(fs.list_files("config/arenas", "%.lua$")) do
+      names[#names + 1] = path:match("([%w_]+)%.lua$")
+    end
+    local listed = {}
+    for name in pairs(arena.CONFIG) do
+      listed[#listed + 1] = name
+    end
+    table.sort(listed)
+    assert.are.same(names, listed)
+    assert.is_true(arena.is_config("g1_arena"))
+    assert.is_false(arena.is_config("g2_terrain"))
+    assert.has_error(function()
+      arena.load("g2_terrain")
+    end)
+  end)
+
+  it("has a stable arena id that changes with any cell or entity", function()
+    local a = arena.load("g1_arena")
+    local id = arena.id(a)
+    assert.matches("^%x%x%x%x%x%x%x%x$", id)
+    assert.are.equal(id, arena.id(arena.load("g1_arena")))
+    a.cells[100] = 1 - a.cells[100]
+    assert.are_not.equal(id, arena.id(a))
+    a.cells[100] = 1 - a.cells[100]
+    a.entities[3].x = a.entities[3].x + 128
+    assert.are_not.equal(id, arena.id(a))
+    a.entities[3].x = a.entities[3].x - 128
+    a.entities[5].facing = "left"
+    assert.are_not.equal(id, arena.id(a))
   end)
 
   it("rejects malformed arenas", function()
