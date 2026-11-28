@@ -1,6 +1,6 @@
-# G2 — Battlefield, terrain and destruction: implementation plan (v1.1, PROPOSAL)
+# G2 — Battlefield, terrain and destruction: implementation plan (v1.1, APPROVED)
 
-Status: **PROPOSAL, awaiting owner review and approval.** No G2 code is written before approval. G3 is not started.
+Status: **APPROVED** by the owner on 2026-11-28 after an independent review of v1.1 at `fa93ba4` (PASS with bounded clarifications). Decisions G2-D1 … G2-D7 are approved as recommended in §13. The six implementation clarifications in §19 are approved and take precedence over the sections they refine. Implementation runs on `g2/battlefield`. G3 is not started.
 
 v1.1 incorporates an internal pre-review by an independent Opus reviewer. That review confirmed the G1 hash-preservation argument. The changes:
 - the slide-restart blocker is fixed (§7);
@@ -447,3 +447,45 @@ Plumbing:
 | Destruction makes outcomes depend on bullet order | Simultaneous resolution in (d), tested in both orders; tank order at spawn, documented |
 | Level files become an injection vector | Non-executing `serialize.decode` only, with size and depth limits; a rejection test |
 | The placeholder look is mistaken for the art direction | PLACEHOLDER labels; G3 owns the art (concept A, ART_DIRECTION §3a) |
+
+## 19. Owner approval and implementation clarifications (2026-11-28)
+
+The owner approved G2-D1 … G2-D7 and authorized implementation with the six clarifications below. They are recorded here before any G2 code, and they refine the sections named.
+
+### C1. Simultaneous destruction events (refines §6.4, §6.5, §6.6)
+- Every impact in one resolution batch (the spawn phase, or step (d) of one sub-step) is calculated against the **same batch-start terrain state**. No cell changes until the batch ends.
+- The batch removes the **union** of all impacts' cells.
+- Each cell actually destroyed is reported **once** in `terrain_destroyed`. A cell claimed by several impacts is attributed to the **first impact in deterministic impact order**: tank order in the spawn phase, bullet order in (d). An impact whose cells were all claimed earlier emits no `terrain_destroyed` for that type, but its `bullet_hit_solid` is still emitted.
+- The final terrain and the set of consumed bullets do not depend on the impact order. Only the event attribution does.
+- Regression coverage: overlapping strips from two impacts (both orders), in (d) and in the spawn phase.
+
+### C2. F5 / F7 interaction (refines §12, §14)
+- **Effective player upgrade level.** The world has one `player_level`, used for the initial level of both players and for every respawn. It is the replay header's `player_level` when present, otherwise the tuning value `arena_player_level` (legacy G1 replays and direct simulation users).
+- **F7** is the ordinary arena-level selector. It cycles 0 → 1 → 2 → 3 → 0 and restarts the current arena at that level. It is not debug tuning, so it never sets `debug_tuned`.
+- **F5** no longer offers `arena_player_level`, so the two keys can never hold conflicting level settings. The committed `arena_player_level` (0) remains only the default for replays without the header field. F5 still edits every other listed key, and any change marks recordings `debug_tuned`.
+- **Restart (F2)** keeps the arena, the F7 level and the F5 copy.
+- **Arena switch (F6)** keeps the F7 level and the F5 copy, and restarts on the other arena.
+- **Recordings** made by the app always carry `arena`, `arena_id` and `player_level`. A recording made with a modified F5 copy is `debug_tuned` whatever the F7 level is.
+
+### C3. Replay arena identity (refines §14)
+- `arena_id` is the 8-hex hash of the built battlefield (cells and entities, i.e. spawns and dummies).
+- **Legacy G1 headers stay valid.** A replay of a config arena (`config/arenas/`, the G1 format) may omit `arena_id`. The four G1 goldens keep their headers, and only `tuning_id` changes.
+- **G2 recordings and goldens require it.** A replay of a level-format arena (`levels/arenas/`) without `arena_id` is refused. Any replay whose `arena_id` differs from the loaded arena is refused, whatever its format, with a message that names both ids.
+- Every new recording carries `arena_id`, in either arena.
+- `tools/update_goldens.lua` never writes `arena_id`. It refuses a fixture whose `arena_id` is missing (G2) or does not match, so a regeneration cannot silently bypass an arena change. A changed arena needs the inputs re-authored by the generator, called out in the PR.
+
+### C4. Smoke consistency (refines §12, §14)
+- The G1 smoke passes `--arena=g1_arena` explicitly and keeps its expectation, including hash `581f15d4`.
+- The terrain smoke passes `--arena=g2_terrain` and has its own expectation.
+- `tools/smoke.sh` runs **both** arena scenarios at every window size it covers: the three supported native macOS sizes (800x600, 1024x640, 1280x720) natively, and the existing four sandbox sizes on Linux.
+- The sandbox smoke coverage and the SIMULATED HiDPI harness are kept. The harness keeps the G1 arena, passed explicitly.
+
+### C5. G1 hash preservation (refines §2, §10)
+- The four approved G1 golden fixtures keep **byte-identical checkpoint hashes**, and only their `tuning_id` line changes. A test compares them with the `c82ff86` values frozen into the test data.
+- This is **not** claimed as hash compatibility for every possible G1 state. A G1 state with upgraded players (level ≥ `steel_break_level`) now has power bullets, which are authoritative state and are hashed. The claim covers the approved goldens, the G1 smoke and any state without the new fields.
+
+### C6. Ice movement (refines §7)
+- `ice_dir` is armed only by an input-driven move whose **forward** displacement along the input direction is > 0 and that ends on ice.
+- A snap-only displacement (the snap succeeds, but the forward move is 0) does not arm `ice_dir`; it clears it.
+- The finite-slide and no-retrigger guarantees are unchanged, and a focused regression test covers the snap-only case.
+- A slide step of 0 u (contact) ends the slide, and the slide uses that tick's movement.
