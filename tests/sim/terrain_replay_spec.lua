@@ -45,6 +45,7 @@ local function observe(name)
     counts = {},
     destroyed = { brick = 0, steel = 0 },
     brick_events = {},
+    steel_events = {},
     slide_end = {},
     forest = false,
     touched = {},
@@ -63,6 +64,8 @@ local function observe(name)
           o.destroyed[e.terrain] = o.destroyed[e.terrain] + #e.cells
           if e.terrain == "brick" then
             o.brick_events[#o.brick_events + 1] = #e.cells
+          else
+            o.steel_events[#o.steel_events + 1] = e.cells
           end
         elseif e.type == "bullet_hit_solid" and e.at_spawn and e.terrain == "brick" then
           spawn_hits[#spawn_hits + 1] = e
@@ -157,8 +160,9 @@ describe("G2 terrain goldens", function()
       assert.is_true(o.through_dug, "a tank passes through a dug opening")
       assert.is_true((o.counts.tank_hit or 0) >= 1, "the target behind the 1/2-tile wall")
       for _, n in ipairs(o.brick_events) do
-        assert.is_true(n <= 2) -- the 2 x 1 strip
+        assert.is_true(n <= 8) -- the 4 x 2 strip (owner tuning, 2026-11-28)
       end
+      assert.is_true(o.brick_events[1] > 2, "wider than the former 2 x 1 strip")
     end
   )
 
@@ -172,7 +176,19 @@ describe("G2 terrain goldens", function()
     assert.are.equal(16, o.block_cells[1]) -- the 1-tile X block
     assert.is_true(#o.brick_events >= 4)
     for _, n in ipairs(o.brick_events) do
-      assert.is_true(n <= 2, "brick strip is the same at level 3")
+      assert.is_true(n <= 8, "brick strip is the same 4 x 2 at level 3")
+    end
+    -- steel keeps its own 2-cell strip (G2-D3): at most two aligned 2 x 2
+    -- blocks per shot, side by side, never wider than 1 tile
+    assert.is_true(#o.steel_events >= 2)
+    for _, cells in ipairs(o.steel_events) do
+      assert.is_true(#cells == 4 or #cells == 8, "one or two steel blocks")
+      local lo, hi = math.huge, -math.huge
+      for _, i in ipairs(cells) do
+        local col = (i - 1) % 52
+        lo, hi = math.min(lo, col), math.max(hi, col)
+      end
+      assert.is_true(hi - lo + 1 <= 4, "steel never wider than 1 tile")
     end
   end)
 

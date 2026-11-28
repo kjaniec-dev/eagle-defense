@@ -9,5 +9,6 @@
 # G1 arena (--arena=g1_arena): unchanged since the G1 tuning approval.
 SMOKE_EXPECT_120="p1=1408,2688 p2=1664,2652 hash=581f15d4"
 # G2 terrain arena (--arena=g2_terrain): P1 slides on ice into the water
-# column, P2 shoots its brick wall point-blank.
-SMOKE_EXPECT_G2_120="p1=512,2688 p2=2304,3072 hash=4b7aaef1"
+# column, P2 shoots its brick wall point-blank. Updated for the owner brick
+# tuning (4 x 2, 2026-11-28; was hash=4b7aaef1 at 2 x 1).
+SMOKE_EXPECT_G2_120="p1=512,2688 p2=2304,3072 hash=ac2a42a0"

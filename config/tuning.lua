@@ -56,14 +56,14 @@ return {
     turret_bullet_speed = { 17, "UNV", "G1 arena only: turret bullet speed, normal" },
     -- G2 terrain (docs/plans/G2_PLAN.md §9; GAME_DESIGN §4.1, §4.3)
     brick_strip_cells = {
-      2,
-      "UNV",
-      "brick strip width in cells (2 = 1/2 tile), centered on the nearest cell boundary",
+      4,
+      "TUNED (owner, 2026-11-28)",
+      "brick strip width in cells (4 = 1 tile) on the nearest cell boundary; steel stays 2 wide",
     },
     brick_strip_depth = {
-      1,
-      "UNV",
-      "brick strip depth in cells along the travel direction (1 = 1/4 tile)",
+      2,
+      "TUNED (owner, 2026-11-28)",
+      "brick strip depth in cells along the travel direction (2 = 1/2 tile)",
     },
     steel_break_level = {
       3,

@@ -38,6 +38,27 @@ function M.nearest_boundary(v)
   return v - r + CELL
 end
 
+-- Width in cells of the steel strip (G2-D3; contract, not tuning): 1/2 tile,
+-- the map-character granularity. It is independent of brick_strip_cells, so
+-- a wider brick strip never widens steel destruction (owner tuning,
+-- 2026-11-28).
+M.STEEL_STRIP_CELLS = 2
+
+-- The `width` cells centered on the cell boundary nearest `center` (cells
+-- boundary/64 - width/2 .. boundary/64 + width/2 - 1), clipped to the field.
+local function strip(center, width)
+  local bc = M.nearest_boundary(center) / CELL
+  local half = math.floor(width / 2)
+  local lo, hi = bc - half, bc + (width - half) - 1
+  if lo < 0 then
+    lo = 0
+  end
+  if hi > N - 1 then
+    hi = N - 1
+  end
+  return lo, hi
+end
+
 function M.out_of_bounds(b)
   return b.x < 0 or b.y < 0 or b.x + b.size > F or b.y + b.size > F
 end
@@ -58,7 +79,7 @@ end
 --     "block" (highest precedence there), brick = { index, ... },
 --     steel = { index, ... } (ascending) }.
 -- `tu` supplies brick_strip_cells and brick_strip_depth; b.power enables
--- steel breaking.
+-- steel breaking, over the fixed STEEL_STRIP_CELLS strip.
 function M.impact(cells, b, tu)
   local d = units.DIRS[b.dir]
   local vertical = d.dx == 0
@@ -107,23 +128,40 @@ function M.impact(cells, b, tu)
     return nil
   end
 
-  -- 2. strip: brick_strip_cells cells centered on the nearest boundary.
+  -- 2. strips, both centered on the cell boundary nearest the bullet's
+  --    center: the brick strip is brick_strip_cells wide (tunable), the
+  --    steel strip is always STEEL_STRIP_CELLS wide (contract).
   local center = px + math.floor(b.size / 2)
-  local bc = M.nearest_boundary(center) / CELL
-  local half = math.floor(tu.brick_strip_cells / 2)
-  local s_lo, s_hi = bc - half, bc + (tu.brick_strip_cells - half) - 1
-  if s_lo < 0 then
-    s_lo = 0
-  end
-  if s_hi > N - 1 then
-    s_hi = N - 1
+  local b_lo, b_hi = strip(center, tu.brick_strip_cells)
+
+  -- 3. power: every steel cell of each aligned 2 x 2 steel block that holds
+  --    a steel cell of the steel strip in the impact line.
+  local brick, steel = {}, {}
+  if b.power then
+    local s_lo, s_hi = strip(center, M.STEEL_STRIP_CELLS)
+    for p = s_lo, s_hi do
+      local i = index(line, p)
+      if DESTROY[cells[i] + 1] == "steel" then
+        local row, col = math.floor((i - 1) / N), (i - 1) % N
+        row, col = row - row % 2, col - col % 2
+        for dr = 0, 1 do
+          for dc = 0, 1 do
+            local j = (row + dr) * N + (col + dc) + 1
+            if DESTROY[cells[j] + 1] == "steel" then
+              steel[j] = true
+            end
+          end
+        end
+      end
+    end
   end
 
-  -- 3. depth: brick_strip_depth lines from the impact line onward. Removal
-  --    in a column stops at the first bullet-blocking cell the bullet
-  --    cannot destroy (block; steel unless the bullet has power).
-  local brick, steel = {}, {}
-  for p = s_lo, s_hi do
+  -- 4. depth: brick_strip_depth lines from the impact line onward, in each
+  --    brick-strip column. Brick is removed; removal in a column stops at
+  --    the first bullet-blocking cell this impact does not remove (block
+  --    always; steel unless step 3 removes it), so brick behind steel that
+  --    stays is never removed.
+  for p = b_lo, b_hi do
     for k = 0, tu.brick_strip_depth - 1 do
       local a = line + sign * k
       if a < 0 or a > N - 1 then
@@ -131,24 +169,9 @@ function M.impact(cells, b, tu)
       end
       local i = index(a, p)
       local code = cells[i]
-      local kind = DESTROY[code + 1]
-      if kind == "brick" then
+      if DESTROY[code + 1] == "brick" then
         brick[i] = true
-      elseif kind == "steel" and b.power then
-        if k == 0 then
-          -- 4. every steel cell of the aligned 2 x 2 steel block
-          local row, col = math.floor((i - 1) / N), (i - 1) % N
-          row, col = row - row % 2, col - col % 2
-          for dr = 0, 1 do
-            for dc = 0, 1 do
-              local j = (row + dr) * N + (col + dc) + 1
-              if DESTROY[cells[j] + 1] == "steel" then
-                steel[j] = true
-              end
-            end
-          end
-        end
-      elseif BLOCKS_BULLETS[code + 1] then
+      elseif not steel[i] and BLOCKS_BULLETS[code + 1] then
         break
       end
     end

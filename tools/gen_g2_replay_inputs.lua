@@ -287,9 +287,9 @@ g:write()
 g = new(
   "brick_demolition",
   "Level 0. P1 digs through the 1/2-, 1- and 2-tile brick walls from below the turret "
-    .. "lane (and hits the target behind the 1/2-tile wall); P2 digs its wall point-blank; "
-    .. "P1 and P2 then shoot a 1-cell wall from opposite sides on the same tick, widen "
-    .. "the opening, and P2 drives through it."
+    .. "lane (and hits the target behind the 1/2-tile wall); P2 digs a pocket in its wall "
+    .. "point-blank; P1 and P2 then shoot the remaining 2-cell wall from opposite sides on "
+    .. "the same tick, P1 widens the opening, and P2 drives through it."
 )
 to_upper_lane(g, 1)
 -- the 1/2-tile wall with the partial row (x 256: cells 5-6), then the
@@ -297,26 +297,29 @@ to_upper_lane(g, 1)
 shoot_up_at(g, 1, h(2), 5)
 -- the 1-tile wall (x 1024: cells 17-18, 4 cells deep)
 shoot_up_at(g, 1, h(8), 5)
--- the 2-tile wall (x 1792: cells 29-30, 8 cells deep)
+-- the 2-tile wall (x 1792: cells 29-30, 8 cells deep), then its remaining
+-- edges from x 1664 and x 1920 (strips 26..29 and 30..33)
 shoot_up_at(g, 1, h(14), 9)
--- P2 digs three rows at three positions (cells 35..40, rows 45..47); the
--- first shot of each is a muzzle impact
+shoot_up_at(g, 1, h(13), 5)
+shoot_up_at(g, 1, h(15), 5)
+-- P2 digs a pocket, one muzzle impact at each of three positions: the
+-- 4 x 2 strips (owner tuning) open cells 34..41, rows 46-47
 for _, x in ipairs({ h(18), h(17), h(19) }) do
   to_column(g, 2, x)
   g:turn(2, "up") -- snaps onto x; the wall blocks the move
   g:at(2, x, 3072)
-  g:shoot(2, 3)
+  g:shoot(2, 1)
 end
 to_column(g, 2, h(18))
-g:drive_to_contact(2, "up") -- into the dug pocket: touching row 44
-g:at(2, h(18), 2880)
+g:drive_to_contact(2, "up") -- into the dug pocket: touching row 45
+g:at(2, h(18), 2944)
 -- P1 back down through the gap, over to the wall top: touching row 44
 to_column(g, 1, h(10))
 g:drive(1, "down", y_ge(h(16)))
 to_column(g, 1, h(18))
 g:drive_to_contact(1, "down")
 g:at(1, h(18), 2560)
--- the same tick, from opposite sides, at the same 1-cell wall
+-- the same tick, from opposite sides, at the same 2-cell wall (rows 44-45)
 g:tick({ press = true }, { press = true })
 g:wait_bullets(1)
 g:wait_bullets(2)

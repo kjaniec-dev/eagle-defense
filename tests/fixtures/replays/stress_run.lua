@@ -5406,6 +5406,6 @@ return {
   },
   name = "stress_run",
   seed = 1,
-  tuning_id = "1008b573",
+  tuning_id = "949c2b01",
   tuning_version = 1,
 }

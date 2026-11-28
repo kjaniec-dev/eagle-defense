@@ -11,13 +11,35 @@ local H = require("tests.sim.helpers")
 
 local idx = H.idx
 
+-- The rule tests below pin the minimal strip, 2 cells x 1 line (the G2-D2
+-- proposal, still an allowed F5 value), so that every cell of the mechanism
+-- is visible; opts.tuning overrides it. The approved default, 4 x 2 (owner,
+-- 2026-11-28), is tested on its own further down ("approved brick tuning").
+local MINIMAL = { brick_strip_cells = 2, brick_strip_depth = 1 }
+
+local function with_minimal(overrides)
+  local t = {}
+  for k, v in pairs(MINIMAL) do
+    t[k] = v
+  end
+  for k, v in pairs(overrides or {}) do
+    t[k] = v
+  end
+  return t
+end
+
 -- An empty arena with the players in the bottom corners (away from the
--- action) and optional dummies.
+-- action) and optional dummies. opts.default = true keeps the committed
+-- tuning instead of the minimal strip.
 local function new_world(opts)
   opts = opts or {}
+  local tu = opts.tuning
+  if not opts.default then
+    tu = with_minimal(opts.tuning)
+  end
   return H.world({
     arena = H.arena_data({}, H.entities({ 0, 24 }, { 24, 24 }, opts.dummies)),
-    tuning = opts.tuning,
+    tuning = tu,
     player_level = opts.player_level,
   })
 end
@@ -210,7 +232,7 @@ describe("muzzle impacts (G2 plan §6.4)", function()
   end)
 
   it("the impact line is the one nearest the shooter (pure rule)", function()
-    local tu = H.tuning()
+    local tu = H.tuning(MINIMAL)
     local cells = world.copy_cells(new_world().cells)
     -- both rows under a spanning up-bullet are brick
     for _, c in ipairs({ 19, 20 }) do
@@ -554,26 +576,33 @@ describe("bullet footprint versus the destruction strip (review P2-2)", function
   it(
     "every supported bullet size, at every alignment, destroys all the brick it touches",
     function()
-      local tu = H.tuning()
       local cells = solid_brick()
       local misses = {}
-      for size = 8, 64 do
-        for off = 0, 63 do
-          for _, dir in ipairs({ "up", "down", "left", "right" }) do
-            local b = { size = size, dir = dir }
-            if dir == "up" or dir == "down" then
-              b.x, b.y = 1216 + off, 1500
-            else
-              b.x, b.y = 1500, 1216 + off
-            end
-            local hit = destruction.impact(cells, b, tu)
-            local removed = {}
-            for _, i in ipairs(hit.brick) do
-              removed[i] = true
-            end
-            for _, i in ipairs(touched(hit, b)) do
-              if not removed[i] then
-                misses[#misses + 1] = ("size %d offset %d %s"):format(size, off, dir)
+      for _, width in ipairs({ 2, 4 }) do
+        local tu = H.tuning({ brick_strip_cells = width })
+        for size = 8, 64 do
+          for off = 0, 63 do
+            for _, dir in ipairs({ "up", "down", "left", "right" }) do
+              local b = { size = size, dir = dir }
+              if dir == "up" or dir == "down" then
+                b.x, b.y = 1216 + off, 1500
+              else
+                b.x, b.y = 1500, 1216 + off
+              end
+              local hit = destruction.impact(cells, b, tu)
+              local removed = {}
+              for _, i in ipairs(hit.brick) do
+                removed[i] = true
+              end
+              for _, i in ipairs(touched(hit, b)) do
+                if not removed[i] then
+                  misses[#misses + 1] = ("width %d size %d offset %d %s"):format(
+                    width,
+                    size,
+                    off,
+                    dir
+                  )
+                end
               end
             end
           end
@@ -598,10 +627,179 @@ describe("bullet footprint versus the destruction strip (review P2-2)", function
     end
     assert.are.equal(32, v.bullet_size) -- the committed default is unchanged
     -- why: at 128 u an off-boundary bullet touches brick outside its strip
+    -- (the bound must hold for the narrowest allowed strip, 2 cells)
     local b = { x = 1200, y = 1500, size = 128, dir = "up" } -- center 1264 -> strip 19, 20
-    local hit = destruction.impact(solid_brick(), b, H.tuning())
+    local hit = destruction.impact(solid_brick(), b, H.tuning(MINIMAL))
     assert.are.same({ idx(19, hit.line), idx(20, hit.line) }, hit.brick)
     assert.are.same({ idx(18, hit.line), idx(19, hit.line), idx(20, hit.line) }, touched(hit, b))
+  end)
+end)
+
+describe("approved brick tuning: 4 x 2 (owner, 2026-11-28)", function()
+  -- These scenarios run with the committed tuning (no overrides).
+  local function default_world(opts)
+    opts = opts or {}
+    opts.default = true
+    return new_world(opts)
+  end
+
+  it("is the committed default", function()
+    local tu = H.tuning()
+    assert.are.same({ 4, 2 }, { tu.brick_strip_cells, tu.brick_strip_depth })
+    assert.are.equal(2, destruction.STEEL_STRIP_CELLS)
+  end)
+
+  -- One bullet per direction into a 1-tile-thick wall, centered on the
+  -- boundary 1280: cells 18..21 across, the 2 lines nearest the shooter.
+  local cases = {
+    { dir = "up", wall = { 10, 20, 30, 23 }, bullet = { 1264, 1600 }, lines = { 22, 23 } },
+    { dir = "down", wall = { 10, 20, 30, 23 }, bullet = { 1264, 1000 }, lines = { 20, 21 } },
+    { dir = "left", wall = { 20, 10, 23, 30 }, bullet = { 1600, 1264 }, lines = { 22, 23 } },
+    { dir = "right", wall = { 20, 10, 23, 30 }, bullet = { 1000, 1264 }, lines = { 20, 21 } },
+  }
+  for _, c in ipairs(cases) do
+    it("removes exactly 4 x 2 cells going " .. c.dir, function()
+      local w = default_world()
+      H.fill(w, c.wall[1], c.wall[2], c.wall[3], c.wall[4], "brick")
+      local b = H.add_bullet(w, 1, c.bullet[1], c.bullet[2], c.dir, 17)
+      local events, changed = settle(w)
+      local want, cells = {}, {}
+      for p = 18, 21 do
+        for _, a in ipairs(c.lines) do
+          local col, row = p, a
+          if c.dir == "left" or c.dir == "right" then
+            col, row = a, p
+          end
+          want[#want + 1] = col .. "," .. row
+          cells[#cells + 1] = idx(col, row)
+        end
+      end
+      table.sort(want)
+      table.sort(cells)
+      assert.are.same(want, changed)
+      assert.are.equal(1, #H.of_type(events, "bullet_hit_solid"))
+      assert.are.same({ { b.id, "brick", cells } }, destroyed(events))
+    end)
+  end
+
+  it("one point-blank shot opens a tank-wide passage through a 1/2-tile brick wall", function()
+    local w = default_world()
+    H.fill(w, 0, 22, 51, 23, "brick") -- 2 cells thick, bottom at 1536
+    local p1 = w.tanks[1]
+    p1.x, p1.y = 1152, 1536 -- touching; box columns 18..21
+    local events = H.run(w, 1, H.frame({ dir = "up", press = true }))
+    assert.is_true(H.of_type(events, "bullet_hit_solid")[1].at_spawn)
+    settle(w)
+    assert.are.equal(104 - 8, H.count(w, "brick"))
+    H.run(w, 30, H.frame("up"))
+    assert.is_true(p1.y < 1536 - 128) -- drove into the opening
+  end)
+
+  it("a 1-tile brick wall takes two point-blank shots to pass", function()
+    local w = default_world()
+    H.fill(w, 0, 20, 51, 23, "brick") -- 4 cells thick, bottom at 1536
+    local p1 = w.tanks[1]
+    p1.x, p1.y = 1152, 1536
+    H.run(w, 1, H.frame({ dir = "up", press = true }))
+    settle(w)
+    H.run(w, 30, H.frame("up"))
+    assert.are.equal(1408, p1.y) -- stopped at rows 20-21 after the first shot
+    H.run(w, 1, H.frame({ dir = "up", press = true }))
+    settle(w)
+    H.run(w, 60, H.frame("up"))
+    assert.is_true(p1.y < 1280 - 128) -- through the wall
+    assert.are.equal(208 - 16, H.count(w, "brick"))
+  end)
+
+  it("a level-3 shot removes the same 1 tile x 1/2 tile of steel as the minimal strip", function()
+    local results = {}
+    for _, tuned in ipairs({ true, false }) do
+      local w = tuned and default_world({ player_level = 3 }) or new_world({ player_level = 3 })
+      H.fill(w, 10, 20, 30, 21, "steel")
+      H.fill(w, 10, 18, 30, 19, "brick") -- brick behind the steel band
+      local p1 = w.tanks[1]
+      p1.x, p1.y = 1152, 1408 -- touching the steel
+      local before = world.copy_cells(w.cells)
+      H.run(w, 1, H.frame({ dir = "up", press = true }))
+      results[#results + 1] = H.changed(before, w.cells)
+    end
+    assert.are.same(
+      { "18,20", "18,21", "19,20", "19,21", "20,20", "20,21", "21,20", "21,21" },
+      results[1]
+    )
+    assert.are.same(results[2], results[1]) -- no wider, and no brick behind it
+  end)
+
+  it("off a cell boundary, a level-3 shot still removes one steel block only", function()
+    local w = default_world({ player_level = 3 })
+    H.fill(w, 10, 20, 30, 21, "steel")
+    H.add_bullet(w, 1, 1200, 1500, "up", 34, true) -- center 1216: brick strip 17..20
+    local _, changed = settle(w)
+    assert.are.same({ "18,20", "18,21", "19,20", "19,21" }, changed) -- steel strip 18, 19
+  end)
+
+  it("steel destruction never depends on the brick strip (every offset, direction)", function()
+    local cells = {}
+    for i = 1, 52 * 52 do
+      cells[i] = H.CODE.steel
+    end
+    local diffs = {}
+    for off = 0, 63 do
+      for _, dir in ipairs({ "up", "down", "left", "right" }) do
+        local b = { size = 32, dir = dir, power = true }
+        if dir == "up" or dir == "down" then
+          b.x, b.y = 1216 + off, 1500
+        else
+          b.x, b.y = 1500, 1216 + off
+        end
+        local base = destruction.impact(cells, b, H.tuning(MINIMAL)).steel
+        assert(#base == 4 or #base == 8, "one or two aligned blocks")
+        for _, width in ipairs({ 2, 4 }) do
+          for _, depth in ipairs({ 1, 2 }) do
+            local tu = H.tuning({ brick_strip_cells = width, brick_strip_depth = depth })
+            local got = destruction.impact(cells, b, tu).steel
+            if table.concat(got, ",") ~= table.concat(base, ",") then
+              diffs[#diffs + 1] = ("%s offset %d width %d depth %d"):format(dir, off, width, depth)
+            end
+          end
+        end
+      end
+    end
+    assert.are.same({}, diffs)
+  end)
+
+  it("brick behind steel that stays is never removed, with or without power", function()
+    for _, power in ipairs({ false, true }) do
+      local w = default_world()
+      H.fill(w, 14, 20, 25, 21, "brick") -- brick behind
+      H.fill(w, 16, 22, 21, 23, "steel") -- steel blocks at columns 16-17, 18-19, 20-21
+      H.fill(w, 18, 22, 19, 23, "brick") -- ... with brick in columns 18-19
+      H.fill(w, 18, 23, 19, 23, "empty") -- ... whose near line is already dug
+      -- center 1216: brick strip 17..20, steel strip 18, 19; impact line 22
+      local b = H.add_bullet(w, 1, 1200, 1600, "up", 17, power)
+      local events, changed = settle(w)
+      -- columns 17 and 20 hit steel outside the steel strip: removal stops
+      assert.are.same({ "18,21", "18,22", "19,21", "19,22" }, changed)
+      assert.are.same(
+        { { b.id, "brick", { idx(18, 21), idx(19, 21), idx(18, 22), idx(19, 22) } } },
+        destroyed(events)
+      )
+    end
+  end)
+
+  it("simultaneous impacts at the default strip remove the union once", function()
+    local w = default_world()
+    H.fill(w, 10, 20, 30, 20, "brick") -- 1-cell wall
+    local up = H.add_bullet(w, 1, 1264, 1349, "up", 17).id -- strip 18..21
+    local down = H.add_bullet(w, 2, 1328, 1243, "down", 17).id -- strip 19..22
+    local before = world.copy_cells(w.cells)
+    local events = H.run(w, 1, nil)
+    assert.are.equal(0, #w.bullets)
+    assert.are.same({ "18,20", "19,20", "20,20", "21,20", "22,20" }, H.changed(before, w.cells))
+    assert.are.same({
+      { up, "brick", { idx(18, 20), idx(19, 20), idx(20, 20), idx(21, 20) } },
+      { down, "brick", { idx(22, 20) } },
+    }, destroyed(events))
   end)
 end)
 

@@ -79,10 +79,10 @@ end)
 describe("G2 tuning additions", function()
   local cfg = require("config.tuning")
 
-  it("commits the G2 plan §9 defaults with their provenance tags", function()
+  it("commits the G2 defaults with their provenance tags (brick: owner tuning)", function()
     local expect = {
-      brick_strip_cells = { 2, "UNV" },
-      brick_strip_depth = { 1, "UNV" },
+      brick_strip_cells = { 4, "TUNED (owner, 2026-11-28)" },
+      brick_strip_depth = { 2, "TUNED (owner, 2026-11-28)" },
       steel_break_level = { 3, "DOC" },
       ice_slide_distance = { 192, "UNV" },
     }

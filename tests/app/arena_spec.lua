@@ -73,10 +73,15 @@ describe("app.states.arena", function()
     local pinned = fs.read("tools/lib/smoke_expect.sh"):match('SMOKE_EXPECT_G2_120="([^"]+)"')
     assert.are.equal(pinned, line)
     assert.are.equal("g2_terrain", info.arena)
-    -- what the script is for: P1 slides on ice, P2 digs brick point-blank
+    -- what the script is for: P1 slides on ice, P2 digs brick point-blank.
+    -- With the 4 x 2 strip (owner tuning, 2026-11-28) a muzzle impact
+    -- (tick 1) and a short shot (tick 21) pierce the 1-tile wall (4 x 4
+    -- cells); the tick-41 bullet flies on up the field, so the presses at
+    -- ticks 61, 81 and 101 meet a bullet in flight. 4 shots: 3 by P2 and
+    -- the turret's first shot (tick 60).
     assert.is_true(slide_ticks >= 28)
-    assert.are.equal(6, st.counts.shots)
-    assert.is_true(st.counts.destroyed >= 8)
+    assert.are.equal(4, st.counts.shots)
+    assert.are.equal(16, st.counts.destroyed)
   end)
 
   it("opens the terrain arena by default", function()
@@ -287,15 +292,19 @@ describe("app.tuning_edit", function()
     e.selected = pos.ice_slide_distance
     assert.is_true(e:adjust(1))
     assert.are.equal(200, e.values.ice_slide_distance) -- step 8
+    -- the committed brick strip is 4 x 2 (owner, 2026-11-28): the last values
     e.selected = pos.brick_strip_cells
-    assert.is_true(e:adjust(1))
     assert.are.equal(4, e.values.brick_strip_cells)
     assert.is_false(e:adjust(1)) -- clamped at the last allowed value
     assert.is_true(e:adjust(-1))
     assert.are.equal(2, e.values.brick_strip_cells)
-    e.selected = pos.brick_strip_depth
+    assert.is_false(e:adjust(-1)) -- clamped at the first allowed value
     assert.is_true(e:adjust(1))
+    assert.are.equal(4, e.values.brick_strip_cells)
+    e.selected = pos.brick_strip_depth
     assert.are.equal(2, e.values.brick_strip_depth)
+    assert.is_true(e:adjust(-1))
+    assert.are.equal(1, e.values.brick_strip_depth)
     assert.is_true(e:modified())
   end)
 end)
